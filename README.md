@@ -11,14 +11,14 @@ To get started with **FPS Aim Trainer**, follow these simple steps:
 
 2. **Clone the Repository:**
    Clone this repository to your local machine using your preferred Git client or by running the following command in your terminal:
-   git clone https://github.com/your-username/fps-aim-trainer.git
+   `git clone https://github.com/ethanewer/fps-aim-trainer`
 
 3. **Navigate to the Project Directory:**
-Change your current working directory to the newly cloned `fps-aim-trainer` directory:
-cd fps-aim-trainer
+Change your current working directory:
+`cd fps-aim-trainer`
 
 4. **Run the Application:**
 Use Cargo, Rust's package manager, to build and run the FPS Aim Trainer:
-cargo run
+`cargo run`
 
 Now, you're all set to hone your aiming skills with **FPS Aim Trainer**. Have fun improving your accuracy!
