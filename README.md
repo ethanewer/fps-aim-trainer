@@ -1,2 +1,7 @@
 # fps-aim-trainer
-First perosn aim trainer written in rust
+This is a first perosn aim trainer written in rust, using OpenGL.
+# Build Instructions:
+Install rust,
+Clone repository,
+cd fps-aim-trainer,
+cargo run,
