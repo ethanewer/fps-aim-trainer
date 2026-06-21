@@ -28,10 +28,11 @@ The app bundle is written to `~/Desktop/Valorant Aim Trainer.app`.
 
 ## Modes And Settings
 
-- Wall clicking: target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking.
-- 360 pill tracking: pill width, movement speed, acceleration, and min/max direction-change timing.
+- Wall clicking: wall distance, target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking.
+- 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.valorant_aim_trainer.cfg` on macOS/Linux.
+- User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
 
 Linux:
 

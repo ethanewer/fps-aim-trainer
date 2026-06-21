@@ -37,8 +37,9 @@ static constexpr float ROOM_HEIGHT = 15.75f;
 static constexpr float ROOM_EYE_HEIGHT = ROOM_HEIGHT * 0.5f;
 static constexpr float PLANE_EYE_HEIGHT = 2.2f;
 static constexpr float TRACKING_CAPSULE_HEIGHT = 1.35f;
-static constexpr float PLANE_HALF_SIZE = 15.0f;
 static constexpr float PLANE_WALL_HEIGHT = 6.8f;
+static constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
+static constexpr float TRACKING_ROOM_SIDE_SCALE = 2.5f;
 static std::string g_settings_path_override;
 
 struct Vec3 {
@@ -80,22 +81,25 @@ static bool is_tracking(ScenarioKind kind) {
 struct WallClickSettings {
     int target_count_min = 5;
     int target_count_max = 5;
-    float radius_min = 0.34f;
-    float radius_max = 0.34f;
-    float horizontal_speed_min = 4.0f;
-    float horizontal_speed_max = 4.0f;
+    float wall_distance = 5.71f;
+    float radius_min = 0.09f;
+    float radius_max = 0.09f;
+    float horizontal_speed_min = 1.02f;
+    float horizontal_speed_max = 1.02f;
     float vertical_speed_min = 0.0f;
-    float vertical_speed_max = 2.4f;
-    float acceleration_min = 20.0f;
-    float acceleration_max = 20.0f;
+    float vertical_speed_max = 0.61f;
+    float acceleration_min = 5.08f;
+    float acceleration_max = 5.08f;
     float change_min = 0.90f;
     float change_max = 2.50f;
 };
 
 struct PillTrackingSettings {
-    float width = 1.24f;
-    float speed = 4.0f;
-    float acceleration = 12.0f;
+    float width = 1.13f;
+    float distance_min = 6.80f;
+    float distance_max = 9.55f;
+    float speed = 3.64f;
+    float acceleration = 10.91f;
     float change_min = 0.35f;
     float change_max = 2.4f;
 };
@@ -222,9 +226,72 @@ static int rand_wall_int_range(Game& game, int low, int high) {
     return dist(game.rng);
 }
 
+static float wall_units_per_meter() {
+    return ROOM_EYE_HEIGHT / CAMERA_REFERENCE_HEIGHT_M;
+}
+
+static float tracking_units_per_meter() {
+    return PLANE_EYE_HEIGHT / CAMERA_REFERENCE_HEIGHT_M;
+}
+
+static float wall_to_units(float meters) {
+    return meters * wall_units_per_meter();
+}
+
+static float tracking_to_units(float meters) {
+    return meters * tracking_units_per_meter();
+}
+
+static float pill_acceleration_max_meters() {
+    return 80.0f / tracking_units_per_meter();
+}
+
+static float pill_speed_max_meters() {
+    return 14.0f / tracking_units_per_meter();
+}
+
+static float units_to_wall_meters(float units) {
+    return units / wall_units_per_meter();
+}
+
+static float units_to_tracking_meters(float units) {
+    return units / tracking_units_per_meter();
+}
+
+static float wall_camera_z() {
+    return ROOM_BACK_Z - 1.5f;
+}
+
+static float wall_z_from_distance(float meters) {
+    return wall_camera_z() - wall_to_units(meters);
+}
+
+static float wall_width_for_distance(float meters) {
+    return std::max(wall_to_units(2.0f), wall_to_units(meters) * (ROOM_WIDTH / (wall_camera_z() - ROOM_WALL_Z)));
+}
+
+static float wall_height_for_distance(float meters) {
+    return std::max(wall_to_units(2.4f), wall_to_units(meters) * (ROOM_HEIGHT / (wall_camera_z() - ROOM_WALL_Z)));
+}
+
+static float wall_back_z_for_distance(float meters) {
+    return wall_camera_z() + std::max(wall_to_units(0.4f), wall_to_units(meters) * 0.18f);
+}
+
+static float tracking_room_half_size(const PillTrackingSettings& settings) {
+    float target_radius = tracking_to_units(settings.width) * 0.5f;
+    float requested_half_size = tracking_to_units(settings.distance_max) * TRACKING_ROOM_SIDE_SCALE * 0.5f;
+    float reachable_half_size = tracking_to_units(settings.distance_max + 1.0f) + target_radius;
+    return std::max({tracking_to_units(3.0f), requested_half_size, reachable_half_size});
+}
+
+static float tracking_room_height(const PillTrackingSettings& settings) {
+    return std::max(PLANE_WALL_HEIGHT, PLANE_EYE_HEIGHT + tracking_to_units(settings.distance_max) * 0.45f);
+}
+
 static Vec3 wall_desired_velocity(Game& game) {
-    float h_speed = rand_wall_range(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max);
-    float v_speed = rand_wall_range(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max);
+    float h_speed = wall_to_units(rand_wall_range(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max));
+    float v_speed = wall_to_units(rand_wall_range(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max));
     return {
         random_sign(game) * h_speed,
         random_sign(game) * v_speed,
@@ -239,11 +306,14 @@ static float wall_change_timer(Game& game) {
     return rand_wall_range(game, game.wall_settings.change_min, game.wall_settings.change_max);
 }
 
-static int wall_capacity_for_radius(float radius) {
-    float min_x = -ROOM_WIDTH * 0.44f + radius;
-    float max_x = ROOM_WIDTH * 0.44f - radius;
-    float min_y = ROOM_HEIGHT * 0.16f + radius;
-    float max_y = ROOM_HEIGHT * 0.84f - radius;
+static int wall_capacity_for_radius(float radius_m, float wall_distance_m) {
+    float radius = wall_to_units(radius_m);
+    float width = wall_width_for_distance(wall_distance_m);
+    float height = wall_height_for_distance(wall_distance_m);
+    float min_x = -width * 0.44f + radius;
+    float max_x = width * 0.44f - radius;
+    float min_y = height * 0.16f + radius;
+    float max_y = height * 0.84f - radius;
     float spacing = radius * 3.0f;
     int cols = std::max(1, static_cast<int>(std::floor((max_x - min_x) / spacing)) + 1);
     int rows = std::max(1, static_cast<int>(std::floor((max_y - min_y) / spacing)) + 1);
@@ -342,20 +412,22 @@ static std::string unique_preset_name(const PresetList& presets, const std::stri
 }
 
 static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
-    normalize_float_range(settings.radius_min, settings.radius_max, 0.12f, 0.9f);
-    int capacity = wall_capacity_for_radius(settings.radius_max);
+    settings.wall_distance = clampf(settings.wall_distance, 2.0f, 30.0f);
+    normalize_float_range(settings.radius_min, settings.radius_max, 0.03f, 0.45f);
+    int capacity = wall_capacity_for_radius(settings.radius_max, settings.wall_distance);
     normalize_int_range(settings.target_count_min, settings.target_count_max, 1, capacity);
-    normalize_float_range(settings.horizontal_speed_min, settings.horizontal_speed_max, 0.0f, 12.0f);
-    normalize_float_range(settings.vertical_speed_min, settings.vertical_speed_max, 0.0f, 12.0f);
-    normalize_float_range(settings.acceleration_min, settings.acceleration_max, 0.0f, 80.0f);
+    normalize_float_range(settings.horizontal_speed_min, settings.horizontal_speed_max, 0.0f, 8.0f);
+    normalize_float_range(settings.vertical_speed_min, settings.vertical_speed_max, 0.0f, 8.0f);
+    normalize_float_range(settings.acceleration_min, settings.acceleration_max, 0.0f, 40.0f);
     normalize_float_range(settings.change_min, settings.change_max, 0.0f, 12.0f);
     (void)game;
 }
 
 static void normalize_pill_settings(PillTrackingSettings& settings) {
-    settings.width = clampf(settings.width, 0.35f, 2.4f);
-    settings.speed = clampf(settings.speed, 0.0f, 14.0f);
-    settings.acceleration = clampf(settings.acceleration, 0.0f, 80.0f);
+    settings.width = clampf(settings.width, 0.20f, 2.50f);
+    normalize_float_range(settings.distance_min, settings.distance_max, 1.5f, 30.0f);
+    settings.speed = clampf(settings.speed, 0.0f, pill_speed_max_meters());
+    settings.acceleration = clampf(settings.acceleration, 0.0f, pill_acceleration_max_meters());
     settings.change_min = clampf(settings.change_min, 0.05f, 8.0f);
     settings.change_max = clampf(settings.change_max, settings.change_min, 12.0f);
 }
@@ -447,12 +519,15 @@ static void save_current_pill_preset(Game& game) {
 }
 
 static Target spawn_wall_target(Game& game, int skip_index = -1) {
-    float radius = rand_wall_range(game, game.wall_settings.radius_min, game.wall_settings.radius_max);
-    float min_x = -ROOM_WIDTH * 0.44f + radius;
-    float max_x = ROOM_WIDTH * 0.44f - radius;
-    float min_y = ROOM_HEIGHT * 0.16f + radius;
-    float max_y = ROOM_HEIGHT * 0.84f - radius;
-    Vec3 pos{0.0f, ROOM_EYE_HEIGHT, ROOM_WALL_Z + 0.45f};
+    float radius = wall_to_units(rand_wall_range(game, game.wall_settings.radius_min, game.wall_settings.radius_max));
+    float wall_width = wall_width_for_distance(game.wall_settings.wall_distance);
+    float wall_height = wall_height_for_distance(game.wall_settings.wall_distance);
+    float wall_z = wall_z_from_distance(game.wall_settings.wall_distance);
+    float min_x = -wall_width * 0.44f + radius;
+    float max_x = wall_width * 0.44f - radius;
+    float min_y = wall_height * 0.16f + radius;
+    float max_y = wall_height * 0.84f - radius;
+    Vec3 pos{0.0f, ROOM_EYE_HEIGHT, wall_z + 0.45f};
     bool placed = false;
     for (int attempt = 0; attempt < 300 && !placed; ++attempt) {
         pos.x = rand_range(game, min_x, max_x);
@@ -470,11 +545,11 @@ static Target spawn_wall_target(Game& game, int skip_index = -1) {
         }
     }
     if (!placed) {
-        radius = game.wall_settings.radius_max;
-        min_x = -ROOM_WIDTH * 0.44f + radius;
-        max_x = ROOM_WIDTH * 0.44f - radius;
-        min_y = ROOM_HEIGHT * 0.16f + radius;
-        max_y = ROOM_HEIGHT * 0.84f - radius;
+        radius = wall_to_units(game.wall_settings.radius_max);
+        min_x = -wall_width * 0.44f + radius;
+        max_x = wall_width * 0.44f - radius;
+        min_y = wall_height * 0.16f + radius;
+        max_y = wall_height * 0.84f - radius;
         float spacing = radius * 3.0f;
         for (float y = min_y; y <= max_y && !placed; y += spacing) {
             for (float x = min_x; x <= max_x && !placed; x += spacing) {
@@ -515,20 +590,53 @@ static Target spawn_wall_target(Game& game, int skip_index = -1) {
         }
     }
     Vec3 desired = wall_desired_velocity(game);
-    float acceleration = rand_wall_range(game, game.wall_settings.acceleration_min, game.wall_settings.acceleration_max);
+    float acceleration = wall_to_units(rand_wall_range(game, game.wall_settings.acceleration_min, game.wall_settings.acceleration_max));
     return {pos, desired, desired, wall_change_timer(game), radius, acceleration};
 }
 
 static Vec3 pill_desired_velocity(Game& game) {
     float angle = rand_range(game, 0.0f, static_cast<float>(M_PI) * 2.0f);
-    return {std::cos(angle) * game.pill_settings.speed, 0.0f, std::sin(angle) * game.pill_settings.speed};
+    float speed = tracking_to_units(game.pill_settings.speed);
+    return {std::cos(angle) * speed, 0.0f, std::sin(angle) * speed};
+}
+
+static Vec3 pill_desired_velocity_for_position(Game& game, Vec3 pos) {
+    float speed = tracking_to_units(game.pill_settings.speed);
+    Vec3 radial{pos.x, 0.0f, pos.z};
+    float dist = length(radial);
+    float min_dist = tracking_to_units(game.pill_settings.distance_min);
+    float max_dist = tracking_to_units(game.pill_settings.distance_max);
+    if (dist > 0.001f) {
+        Vec3 outward = radial / dist;
+        float tangent_mix = rand_range(game, -0.45f, 0.45f);
+        Vec3 tangent{-outward.z, 0.0f, outward.x};
+        float inner_guard = min_dist * 1.05f;
+        float outer_guard = max_dist * 0.95f;
+        if (inner_guard >= outer_guard) {
+            float midpoint = (min_dist + max_dist) * 0.5f;
+            if (dist > midpoint + 0.001f) {
+                return normalize(outward * -1.0f + tangent * tangent_mix) * speed;
+            }
+            if (dist < midpoint - 0.001f) {
+                return normalize(outward + tangent * tangent_mix) * speed;
+            }
+            return tangent * random_sign(game) * speed;
+        }
+        if (dist >= outer_guard) {
+            return normalize(outward * -1.0f + tangent * tangent_mix) * speed;
+        }
+        if (dist <= inner_guard) {
+            return normalize(outward + tangent * tangent_mix) * speed;
+        }
+    }
+    return pill_desired_velocity(game);
 }
 
 static Target spawn_pill_target(Game& game) {
-    float radius = game.pill_settings.width * 0.5f;
+    float radius = tracking_to_units(game.pill_settings.width) * 0.5f;
     float angle = -static_cast<float>(M_PI) * 0.5f + rand_range(game, -0.35f, 0.35f);
-    float dist = rand_range(game, 7.5f, 10.5f);
-    Vec3 desired = pill_desired_velocity(game);
+    float dist = tracking_to_units(rand_range(game, game.pill_settings.distance_min, game.pill_settings.distance_max));
+    Vec3 desired = pill_desired_velocity_for_position(game, {std::cos(angle) * dist, PLANE_EYE_HEIGHT, std::sin(angle) * dist});
     return {
         {std::cos(angle) * dist, PLANE_EYE_HEIGHT, std::sin(angle) * dist},
         desired,
@@ -687,10 +795,10 @@ static void resolve_wall_target_collisions(Game& game, float min_x, float max_x,
 
 static void update_wall_targets(Game& game, float dt) {
     float max_speed = std::sqrt(
-        game.wall_settings.horizontal_speed_max * game.wall_settings.horizontal_speed_max +
-        game.wall_settings.vertical_speed_max * game.wall_settings.vertical_speed_max
+        wall_to_units(game.wall_settings.horizontal_speed_max) * wall_to_units(game.wall_settings.horizontal_speed_max) +
+        wall_to_units(game.wall_settings.vertical_speed_max) * wall_to_units(game.wall_settings.vertical_speed_max)
     );
-    int substeps = std::max(1, static_cast<int>(std::ceil((max_speed * dt) / std::max(0.04f, game.wall_settings.radius_min * 0.4f))));
+    int substeps = std::max(1, static_cast<int>(std::ceil((max_speed * dt) / std::max(0.04f, wall_to_units(game.wall_settings.radius_min) * 0.4f))));
     substeps = std::min(substeps, 24);
     float step_dt = dt / static_cast<float>(substeps);
 
@@ -705,10 +813,12 @@ static void update_wall_targets(Game& game, float dt) {
             lock_disabled_wall_axes(game, target);
             target.pos = target.pos + target.vel * step_dt;
 
-            float min_x = -ROOM_WIDTH * 0.48f + target.radius;
-            float max_x = ROOM_WIDTH * 0.48f - target.radius;
-            float min_y = ROOM_HEIGHT * 0.16f + target.radius;
-            float max_y = ROOM_HEIGHT * 0.84f - target.radius;
+            float wall_width = wall_width_for_distance(game.wall_settings.wall_distance);
+            float wall_height = wall_height_for_distance(game.wall_settings.wall_distance);
+            float min_x = -wall_width * 0.48f + target.radius;
+            float max_x = wall_width * 0.48f - target.radius;
+            float min_y = wall_height * 0.16f + target.radius;
+            float max_y = wall_height * 0.84f - target.radius;
             if (target.pos.x < min_x || target.pos.x > max_x) {
                 target.pos.x = clampf(target.pos.x, min_x, max_x);
                 target.vel.x = -target.vel.x;
@@ -723,10 +833,10 @@ static void update_wall_targets(Game& game, float dt) {
         }
         resolve_wall_target_collisions(
             game,
-            -ROOM_WIDTH * 0.48f + game.wall_settings.radius_max,
-            ROOM_WIDTH * 0.48f - game.wall_settings.radius_max,
-            ROOM_HEIGHT * 0.16f + game.wall_settings.radius_max,
-            ROOM_HEIGHT * 0.84f - game.wall_settings.radius_max
+            -wall_width_for_distance(game.wall_settings.wall_distance) * 0.48f + wall_to_units(game.wall_settings.radius_max),
+            wall_width_for_distance(game.wall_settings.wall_distance) * 0.48f - wall_to_units(game.wall_settings.radius_max),
+            wall_height_for_distance(game.wall_settings.wall_distance) * 0.16f + wall_to_units(game.wall_settings.radius_max),
+            wall_height_for_distance(game.wall_settings.wall_distance) * 0.84f - wall_to_units(game.wall_settings.radius_max)
         );
     }
 }
@@ -738,12 +848,42 @@ static void update_pill_target(Game& game, float dt) {
     Target& target = game.targets[0];
     target.change_timer -= dt;
     if (target.change_timer <= 0.0f) {
-        target.desired_vel = pill_desired_velocity(game);
+        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
         target.change_timer = rand_range(game, game.pill_settings.change_min, game.pill_settings.change_max);
     }
-    target.vel = approach_velocity(target.vel, target.desired_vel, game.pill_settings.acceleration, dt);
+    Vec3 radial{target.pos.x, 0.0f, target.pos.z};
+    float dist = length(radial);
+    float min_dist = tracking_to_units(game.pill_settings.distance_min);
+    float max_dist = tracking_to_units(game.pill_settings.distance_max);
+    Vec3 previous_radial = radial;
+    if (dist > 0.001f && (dist <= min_dist * 1.03f || dist >= max_dist * 0.97f)) {
+        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
+    }
+    target.vel = approach_velocity(target.vel, target.desired_vel, tracking_to_units(game.pill_settings.acceleration), dt);
     target.pos = target.pos + target.vel * dt;
-    float limit = PLANE_HALF_SIZE - 2.5f - target.radius;
+    radial = {target.pos.x, 0.0f, target.pos.z};
+    dist = length(radial);
+    if (dist > 0.001f && dist > max_dist) {
+        Vec3 outward = radial / dist;
+        target.pos.x = outward.x * max_dist;
+        target.pos.z = outward.z * max_dist;
+        float radial_speed = dot(target.vel, outward);
+        if (radial_speed > 0.0f) {
+            target.vel = target.vel - outward * radial_speed;
+        }
+        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
+    } else if (dist > 0.001f && dist < min_dist) {
+        float previous_dist = length(previous_radial);
+        Vec3 outward = previous_dist > 0.001f ? previous_radial / previous_dist : radial / dist;
+        target.pos.x = outward.x * min_dist;
+        target.pos.z = outward.z * min_dist;
+        float radial_speed = dot(target.vel, outward);
+        if (radial_speed < 0.0f) {
+            target.vel = target.vel - outward * radial_speed;
+        }
+        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
+    }
+    float limit = tracking_room_half_size(game.pill_settings) - tracking_to_units(1.0f) - target.radius;
     if (std::fabs(target.pos.x) > limit) {
         target.pos.x = clampf(target.pos.x, -limit, limit);
         target.vel.x = -target.vel.x;
@@ -753,10 +893,6 @@ static void update_pill_target(Game& game, float dt) {
         target.pos.z = clampf(target.pos.z, -limit, limit);
         target.vel.z = -target.vel.z;
         target.desired_vel.z = -target.desired_vel.z;
-    }
-    if (length(target.pos - camera_pos(game)) < 4.0f) {
-        target.vel = target.vel * -1.0f;
-        target.desired_vel = target.desired_vel * -1.0f;
     }
 }
 
@@ -880,27 +1016,32 @@ static void look_at(Vec3 eye, Vec3 center, Vec3 up) {
     glMultMatrixf(m);
 }
 
-static void draw_wall_room() {
+static void draw_wall_room(const Game& game) {
+    float wall_distance = game.wall_settings.wall_distance;
+    float wall_z = wall_z_from_distance(wall_distance);
+    float back_z = wall_back_z_for_distance(wall_distance);
+    float width = wall_width_for_distance(wall_distance);
+    float height = wall_height_for_distance(wall_distance);
     color(94, 101, 109);
-    draw_box({0.0f, ROOM_HEIGHT * 0.5f, ROOM_WALL_Z}, {ROOM_WIDTH, ROOM_HEIGHT, 0.18f});
+    draw_box({0.0f, height * 0.5f, wall_z}, {width, height, 0.18f});
     color(82, 89, 97);
-    draw_box({0.0f, -0.05f, (ROOM_WALL_Z + ROOM_BACK_Z) * 0.5f}, {ROOM_WIDTH, 0.1f, ROOM_BACK_Z - ROOM_WALL_Z});
+    draw_box({0.0f, -0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
     color(78, 85, 93);
-    draw_box({0.0f, ROOM_HEIGHT + 0.05f, (ROOM_WALL_Z + ROOM_BACK_Z) * 0.5f}, {ROOM_WIDTH, 0.1f, ROOM_BACK_Z - ROOM_WALL_Z});
+    draw_box({0.0f, height + 0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
     color(72, 79, 87);
-    draw_box({-ROOM_WIDTH * 0.5f, ROOM_HEIGHT * 0.5f, (ROOM_WALL_Z + ROOM_BACK_Z) * 0.5f}, {0.15f, ROOM_HEIGHT, ROOM_BACK_Z - ROOM_WALL_Z});
-    draw_box({ROOM_WIDTH * 0.5f, ROOM_HEIGHT * 0.5f, (ROOM_WALL_Z + ROOM_BACK_Z) * 0.5f}, {0.15f, ROOM_HEIGHT, ROOM_BACK_Z - ROOM_WALL_Z});
+    draw_box({-width * 0.5f, height * 0.5f, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
+    draw_box({width * 0.5f, height * 0.5f, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
     color(64, 70, 78);
-    draw_box({0.0f, ROOM_HEIGHT * 0.5f, ROOM_WALL_Z + 0.03f}, {ROOM_WIDTH + 0.25f, 0.18f, 0.08f});
-    draw_box({0.0f, 0.0f, ROOM_WALL_Z + 0.03f}, {ROOM_WIDTH + 0.25f, 0.18f, 0.08f});
-    draw_box({-ROOM_WIDTH * 0.5f, ROOM_HEIGHT * 0.5f, ROOM_WALL_Z + 0.03f}, {0.18f, ROOM_HEIGHT + 0.25f, 0.08f});
-    draw_box({ROOM_WIDTH * 0.5f, ROOM_HEIGHT * 0.5f, ROOM_WALL_Z + 0.03f}, {0.18f, ROOM_HEIGHT + 0.25f, 0.08f});
+    draw_box({0.0f, height * 0.5f, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
+    draw_box({0.0f, 0.0f, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
+    draw_box({-width * 0.5f, height * 0.5f, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
+    draw_box({width * 0.5f, height * 0.5f, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
 }
 
-static void draw_plane360() {
-    float h = PLANE_HALF_SIZE;
+static void draw_plane360(const Game& game) {
+    float h = tracking_room_half_size(game.pill_settings);
     float y0 = 0.0f;
-    float y1 = PLANE_WALL_HEIGHT;
+    float y1 = tracking_room_height(game.pill_settings);
 
     draw_quad_gradient(
         {-h, y0, -h}, {h, y0, -h}, {h, y0, h}, {-h, y0, h},
@@ -949,13 +1090,33 @@ static void draw_target(const Target& target, ScenarioKind kind) {
     draw_lit_sphere(target.pos, target.radius);
 }
 
+static float scene_far_plane(const Game& game) {
+    if (game.scenario.map == MapKind::WallRoom) {
+        float wall_distance = game.wall_settings.wall_distance;
+        float width = wall_width_for_distance(wall_distance);
+        float height = wall_height_for_distance(wall_distance);
+        float far_z = wall_z_from_distance(wall_distance) - wall_to_units(game.wall_settings.radius_max);
+        Vec3 eye = camera_pos(game);
+        float max_x = width * 0.5f + wall_to_units(game.wall_settings.radius_max);
+        float max_y = std::max(std::fabs(0.0f - eye.y), std::fabs(height - eye.y)) + wall_to_units(game.wall_settings.radius_max);
+        float max_z = std::fabs(far_z - eye.z);
+        return std::max(120.0f, std::sqrt(max_x * max_x + max_y * max_y + max_z * max_z) + 8.0f);
+    }
+    float half_size = tracking_room_half_size(game.pill_settings);
+    float room_height = tracking_room_height(game.pill_settings);
+    Vec3 eye = camera_pos(game);
+    float radius = tracking_to_units(game.pill_settings.width) * 0.5f;
+    float max_y = std::max(std::fabs(0.0f - eye.y), std::fabs(room_height - eye.y)) + radius + TRACKING_CAPSULE_HEIGHT;
+    return std::max(120.0f, std::sqrt(half_size * half_size * 2.0f + max_y * max_y) + 8.0f);
+}
+
 static void begin_3d(const Game& game, int w, int h) {
     float aspect = static_cast<float>(w) / static_cast<float>(std::max(1, h));
     float vertical_fov = rad_to_deg(2.0f * std::atan(std::tan(deg_to_rad(VALORANT_HORIZONTAL_FOV_DEG) * 0.5f) / aspect));
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    perspective(vertical_fov, aspect, 0.03f, 120.0f);
+    perspective(vertical_fov, aspect, 0.03f, scene_far_plane(game));
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     Vec3 eye = camera_pos(game);
@@ -991,7 +1152,7 @@ static void rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8
 
 static const std::array<const char*, 7>& glyph(char c) {
     static const std::array<const char*, 7> blank = {"00000","00000","00000","00000","00000","00000","00000"};
-    static const std::array<const char*, 7> glyphs[43] = {
+    static const std::array<const char*, 7> glyphs[47] = {
         {"01110","10001","10011","10101","11001","10001","01110"}, // 0
         {"00100","01100","00100","00100","00100","00100","01110"}, // 1
         {"01110","10001","00001","00010","00100","01000","11111"}, // 2
@@ -1035,6 +1196,10 @@ static const std::array<const char*, 7>& glyph(char c) {
         {"00001","00010","00010","00100","01000","01000","10000"}, // /
         {"11001","11010","00100","01000","10110","00110","00000"}, // %
         {"00000","00000","00000","00000","00000","00000","11111"}, // _
+        {"00110","01000","10000","10000","10000","01000","00110"}, // (
+        {"01100","00010","00001","00001","00001","00010","01100"}, // )
+        {"11100","10000","10000","10000","10000","10000","11100"}, // [
+        {"00111","00001","00001","00001","00001","00001","00111"}, // ]
     };
     if (c >= '0' && c <= '9') return glyphs[c - '0'];
     if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
@@ -1046,6 +1211,10 @@ static const std::array<const char*, 7>& glyph(char c) {
     if (c == '/') return glyphs[40];
     if (c == '%') return glyphs[41];
     if (c == '_') return glyphs[42];
+    if (c == '(') return glyphs[43];
+    if (c == ')') return glyphs[44];
+    if (c == '[') return glyphs[45];
+    if (c == ']') return glyphs[46];
     return blank;
 }
 
@@ -1231,7 +1400,7 @@ static void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 3\n";
+    out << "version 4\n";
     out << "valorant_sens " << normalized.valorant_sens << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
@@ -1240,6 +1409,7 @@ static void save_settings(const Game& game) {
         out << "wall_preset " << std::quoted(preset.name) << " "
             << preset.settings.target_count_min << " "
             << preset.settings.target_count_max << " "
+            << preset.settings.wall_distance << " "
             << preset.settings.radius_min << " "
             << preset.settings.radius_max << " "
             << preset.settings.horizontal_speed_min << " "
@@ -1254,6 +1424,8 @@ static void save_settings(const Game& game) {
     for (const PillPreset& preset : normalized.pill_presets) {
         out << "pill_preset " << std::quoted(preset.name) << " "
             << preset.settings.width << " "
+            << preset.settings.distance_min << " "
+            << preset.settings.distance_max << " "
             << preset.settings.speed << " "
             << preset.settings.acceleration << " "
             << preset.settings.change_min << " "
@@ -1268,6 +1440,7 @@ static void load_settings(Game& game) {
         apply_selected_presets(game);
         return;
     }
+    int settings_version = 0;
     std::string line;
     while (std::getline(in, line)) {
         if (line.empty()) {
@@ -1277,6 +1450,7 @@ static void load_settings(Game& game) {
         std::string key;
         row >> key;
         if (key == "version") {
+            row >> settings_version;
             continue;
         }
         if (key == "valorant_sens") {
@@ -1295,30 +1469,46 @@ static void load_settings(Game& game) {
             while (row >> value) {
                 values.push_back(value);
             }
-            if (values.size() >= 12) {
+            if (values.size() >= 13) {
                 preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
                 preset.settings.target_count_max = static_cast<int>(std::round(values[1]));
-                preset.settings.radius_min = values[2];
-                preset.settings.radius_max = values[3];
-                preset.settings.horizontal_speed_min = values[4];
-                preset.settings.horizontal_speed_max = values[5];
-                preset.settings.vertical_speed_min = values[6];
-                preset.settings.vertical_speed_max = values[7];
-                preset.settings.acceleration_min = values[8];
-                preset.settings.acceleration_max = values[9];
+                preset.settings.wall_distance = values[2];
+                preset.settings.radius_min = values[3];
+                preset.settings.radius_max = values[4];
+                preset.settings.horizontal_speed_min = values[5];
+                preset.settings.horizontal_speed_max = values[6];
+                preset.settings.vertical_speed_min = values[7];
+                preset.settings.vertical_speed_max = values[8];
+                preset.settings.acceleration_min = values[9];
+                preset.settings.acceleration_max = values[10];
+                preset.settings.change_min = values[11];
+                preset.settings.change_max = values[12];
+            } else if (values.size() >= 12) {
+                preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
+                preset.settings.target_count_max = static_cast<int>(std::round(values[1]));
+                preset.settings.wall_distance = units_to_wall_meters(wall_camera_z() - ROOM_WALL_Z);
+                preset.settings.radius_min = units_to_wall_meters(values[2]);
+                preset.settings.radius_max = units_to_wall_meters(values[3]);
+                preset.settings.horizontal_speed_min = units_to_wall_meters(values[4]);
+                preset.settings.horizontal_speed_max = units_to_wall_meters(values[5]);
+                preset.settings.vertical_speed_min = units_to_wall_meters(values[6]);
+                preset.settings.vertical_speed_max = units_to_wall_meters(values[7]);
+                preset.settings.acceleration_min = units_to_wall_meters(values[8]);
+                preset.settings.acceleration_max = units_to_wall_meters(values[9]);
                 preset.settings.change_min = values[10];
                 preset.settings.change_max = values[11];
             } else if (values.size() >= 6) {
                 preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
                 preset.settings.target_count_max = preset.settings.target_count_min;
-                preset.settings.radius_min = values[1];
-                preset.settings.radius_max = values[1];
-                preset.settings.horizontal_speed_min = values[2];
-                preset.settings.horizontal_speed_max = values[2];
-                preset.settings.vertical_speed_min = values[3];
-                preset.settings.vertical_speed_max = values[3];
-                preset.settings.acceleration_min = values[4];
-                preset.settings.acceleration_max = values[4];
+                preset.settings.wall_distance = units_to_wall_meters(wall_camera_z() - ROOM_WALL_Z);
+                preset.settings.radius_min = units_to_wall_meters(values[1]);
+                preset.settings.radius_max = units_to_wall_meters(values[1]);
+                preset.settings.horizontal_speed_min = units_to_wall_meters(values[2]);
+                preset.settings.horizontal_speed_max = units_to_wall_meters(values[2]);
+                preset.settings.vertical_speed_min = units_to_wall_meters(values[3]);
+                preset.settings.vertical_speed_max = units_to_wall_meters(values[3]);
+                preset.settings.acceleration_min = units_to_wall_meters(values[4]);
+                preset.settings.acceleration_max = units_to_wall_meters(values[4]);
                 preset.settings.change_min = values[5] <= 0.0f ? 0.0f : values[5] * 0.55f;
                 preset.settings.change_max = values[5] <= 0.0f ? 0.0f : values[5] * 1.55f;
             }
@@ -1327,12 +1517,29 @@ static void load_settings(Game& game) {
             }
         } else if (key == "pill_preset") {
             PillPreset preset;
-            row >> std::quoted(preset.name)
-                >> preset.settings.width
-                >> preset.settings.speed
-                >> preset.settings.acceleration
-                >> preset.settings.change_min
-                >> preset.settings.change_max;
+            row >> std::quoted(preset.name);
+            std::vector<float> values;
+            float value = 0.0f;
+            while (row >> value) {
+                values.push_back(value);
+            }
+            if (values.size() >= 7) {
+                preset.settings.width = values[0];
+                preset.settings.distance_min = values[1];
+                preset.settings.distance_max = values[2];
+                preset.settings.speed = values[3];
+                preset.settings.acceleration = values[4];
+                preset.settings.change_min = values[5];
+                preset.settings.change_max = values[6];
+            } else if (values.size() >= 5) {
+                preset.settings.width = units_to_tracking_meters(values[0]);
+                preset.settings.distance_min = units_to_tracking_meters(7.5f);
+                preset.settings.distance_max = units_to_tracking_meters(10.5f);
+                preset.settings.speed = units_to_tracking_meters(values[1]);
+                preset.settings.acceleration = units_to_tracking_meters(values[2]);
+                preset.settings.change_min = values[3];
+                preset.settings.change_max = values[4];
+            }
             if (!preset.name.empty()) {
                 game.pill_presets.push_back(preset);
             }
@@ -1344,17 +1551,20 @@ static void load_settings(Game& game) {
                 game.wall_settings.target_count_min = static_cast<int>(std::round(value));
                 game.wall_settings.target_count_max = game.wall_settings.target_count_min;
             }
-            else if (key == "wall_radius") game.wall_settings.radius_min = game.wall_settings.radius_max = value;
-            else if (key == "wall_hspeed") game.wall_settings.horizontal_speed_min = game.wall_settings.horizontal_speed_max = value;
-            else if (key == "wall_vspeed") game.wall_settings.vertical_speed_min = game.wall_settings.vertical_speed_max = value;
-            else if (key == "wall_accel") game.wall_settings.acceleration_min = game.wall_settings.acceleration_max = value;
+            else if (key == "wall_distance") game.wall_settings.wall_distance = value;
+            else if (key == "wall_radius") game.wall_settings.radius_min = game.wall_settings.radius_max = units_to_wall_meters(value);
+            else if (key == "wall_hspeed") game.wall_settings.horizontal_speed_min = game.wall_settings.horizontal_speed_max = units_to_wall_meters(value);
+            else if (key == "wall_vspeed") game.wall_settings.vertical_speed_min = game.wall_settings.vertical_speed_max = units_to_wall_meters(value);
+            else if (key == "wall_accel") game.wall_settings.acceleration_min = game.wall_settings.acceleration_max = units_to_wall_meters(value);
             else if (key == "wall_change") {
                 game.wall_settings.change_min = value <= 0.0f ? 0.0f : value * 0.55f;
                 game.wall_settings.change_max = value <= 0.0f ? 0.0f : value * 1.55f;
             }
-            else if (key == "pill_width") game.pill_settings.width = value;
-            else if (key == "pill_speed") game.pill_settings.speed = value;
-            else if (key == "pill_accel") game.pill_settings.acceleration = value;
+            else if (key == "pill_width") game.pill_settings.width = units_to_tracking_meters(value);
+            else if (key == "pill_dist_min") game.pill_settings.distance_min = value;
+            else if (key == "pill_dist_max") game.pill_settings.distance_max = value;
+            else if (key == "pill_speed") game.pill_settings.speed = units_to_tracking_meters(value);
+            else if (key == "pill_accel") game.pill_settings.acceleration = units_to_tracking_meters(value);
             else if (key == "pill_change_min") game.pill_settings.change_min = value;
             else if (key == "pill_change_max") game.pill_settings.change_max = value;
         }
@@ -1376,11 +1586,11 @@ static void draw_world(const Game& game, int w, int h) {
     }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     begin_3d(game, w, h);
-    if (game.scenario.map == MapKind::WallRoom) draw_wall_room();
-    else draw_plane360();
+    if (game.scenario.map == MapKind::WallRoom) draw_wall_room(game);
+    else draw_plane360(game);
     GLfloat light_ambient[] = {0.82f, 0.82f, 0.84f, 1.0f};
     GLfloat light_diffuse[] = {0.70f, 0.70f, 0.68f, 1.0f};
-    GLfloat light_pos[] = {-4.0f, game.scenario.map == MapKind::WallRoom ? ROOM_HEIGHT + 1.5f : PLANE_WALL_HEIGHT + 3.0f, 1.0f, 1.0f};
+    GLfloat light_pos[] = {-4.0f, game.scenario.map == MapKind::WallRoom ? wall_height_for_distance(game.wall_settings.wall_distance) + 1.5f : tracking_room_height(game.pill_settings) + 3.0f, 1.0f, 1.0f};
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, light_ambient);
@@ -1576,18 +1786,20 @@ static void draw_wall_tab(Game& game, const Input& input, float left, float top,
     float row = top + 92.0f;
     text_fit(x + 304.0f, row - 22.0f, "MIN", 1.45f, 72.0f, 150, 162, 178);
     text_fit(x + 394.0f, row - 22.0f, "MAX", 1.45f, 72.0f, 150, 162, 178);
-    setting_row_int_range(input, x, row, "TARGETS", game.wall_settings.target_count_min, game.wall_settings.target_count_max, 1, 1, wall_capacity_for_radius(game.wall_settings.radius_max));
-    row += 36.0f;
-    setting_row_float_range(input, x, row, "RADIUS", game.wall_settings.radius_min, game.wall_settings.radius_max, 0.02f, 0.12f, 0.9f);
-    row += 36.0f;
-    setting_row_float_range(input, x, row, "H SPEED", game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max, 0.25f, 0.0f, 12.0f);
-    row += 36.0f;
-    setting_row_float_range(input, x, row, "V SPEED", game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max, 0.25f, 0.0f, 12.0f);
-    row += 36.0f;
-    setting_row_float_range(input, x, row, "ACCEL", game.wall_settings.acceleration_min, game.wall_settings.acceleration_max, 1.0f, 0.0f, 80.0f);
-    row += 36.0f;
-    setting_row_float_range(input, x, row, "DIR SEC", game.wall_settings.change_min, game.wall_settings.change_max, 0.10f, 0.0f, 12.0f);
-    text_fit(x, base_h - 42.0f, "MIN-MAX RANGES ARE SAMPLED UNIFORMLY PER TARGET", 2.0f, 650.0f, 180, 190, 204);
+    setting_row_float(input, x, row, "WALL [M]", game.wall_settings.wall_distance, 0.25f, 2.0f, 30.0f);
+    row += 34.0f;
+    setting_row_int_range(input, x, row, "TARGETS", game.wall_settings.target_count_min, game.wall_settings.target_count_max, 1, 1, wall_capacity_for_radius(game.wall_settings.radius_max, game.wall_settings.wall_distance));
+    row += 34.0f;
+    setting_row_float_range(input, x, row, "RADIUS [M]", game.wall_settings.radius_min, game.wall_settings.radius_max, 0.01f, 0.03f, 0.45f);
+    row += 34.0f;
+    setting_row_float_range(input, x, row, "H SPEED [M/S]", game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max, 0.10f, 0.0f, 8.0f);
+    row += 34.0f;
+    setting_row_float_range(input, x, row, "V SPEED [M/S]", game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max, 0.10f, 0.0f, 8.0f);
+    row += 34.0f;
+    setting_row_float_range(input, x, row, "ACCEL [M/S2]", game.wall_settings.acceleration_min, game.wall_settings.acceleration_max, 0.5f, 0.0f, 40.0f);
+    row += 34.0f;
+    setting_row_float_range(input, x, row, "DIR [SEC]", game.wall_settings.change_min, game.wall_settings.change_max, 0.10f, 0.0f, 12.0f);
+    text_fit(x, base_h - 42.0f, "DISTANCES AND SPEEDS USE METERS AND SECONDS", 2.0f, 650.0f, 180, 190, 204);
 }
 
 static void draw_pill_tab(Game& game, const Input& input, float left, float top, float base_h) {
@@ -1626,16 +1838,20 @@ static void draw_pill_tab(Game& game, const Input& input, float left, float top,
         start_scenario(game, game.scenarios[1]);
     }
     float row = top + 92.0f;
-    setting_row_float(input, x, row, "PILL WIDTH", game.pill_settings.width, 0.05f, 0.35f, 2.4f);
-    row += 42.0f;
-    setting_row_float(input, x, row, "SPEED", game.pill_settings.speed, 0.25f, 0.0f, 14.0f);
-    row += 42.0f;
-    setting_row_float(input, x, row, "ACCEL", game.pill_settings.acceleration, 1.0f, 0.0f, 80.0f);
-    row += 42.0f;
-    setting_row_float(input, x, row, "MIN SEC", game.pill_settings.change_min, 0.05f, 0.05f, 8.0f);
-    row += 42.0f;
-    setting_row_float(input, x, row, "MAX SEC", game.pill_settings.change_max, 0.10f, game.pill_settings.change_min, 12.0f);
-    text_fit(x, base_h - 42.0f, "DIRECTION TIMING IS RANDOM BETWEEN MIN AND MAX", 2.0f, 650.0f, 180, 190, 204);
+    setting_row_float(input, x, row, "PILL [M]", game.pill_settings.width, 0.05f, 0.20f, 2.5f);
+    row += 36.0f;
+    setting_row_float(input, x, row, "MIN [M]", game.pill_settings.distance_min, 0.25f, 1.5f, 30.0f);
+    row += 36.0f;
+    setting_row_float(input, x, row, "MAX [M]", game.pill_settings.distance_max, 0.25f, game.pill_settings.distance_min, 30.0f);
+    row += 36.0f;
+    setting_row_float(input, x, row, "SPEED [M/S]", game.pill_settings.speed, 0.25f, 0.0f, pill_speed_max_meters());
+    row += 36.0f;
+    setting_row_float(input, x, row, "ACCEL [M/S2]", game.pill_settings.acceleration, 0.5f, 0.0f, pill_acceleration_max_meters());
+    row += 36.0f;
+    setting_row_float(input, x, row, "MIN [SEC]", game.pill_settings.change_min, 0.05f, 0.05f, 8.0f);
+    row += 36.0f;
+    setting_row_float(input, x, row, "MAX [SEC]", game.pill_settings.change_max, 0.10f, game.pill_settings.change_min, 12.0f);
+    text_fit(x, base_h - 42.0f, "PILL DISTANCE IS CONSTRAINED BY MOVEMENT DECISIONS", 2.0f, 650.0f, 180, 190, 204);
 }
 
 static void draw_general_tab(Game& game, const Input& input, float left, float top, float base_h) {
@@ -1651,11 +1867,11 @@ static void draw_general_tab(Game& game, const Input& input, float left, float t
     row += 74.0f;
     text(left, row, "CROSSHAIR", 2.8f);
     row += 42.0f;
-    setting_row_float(input, left, row, "LENGTH", game.crosshair.length, 1.0f, 4.0f, 24.0f);
+    setting_row_float(input, left, row, "LENGTH [PX]", game.crosshair.length, 1.0f, 4.0f, 24.0f);
     row += 42.0f;
-    setting_row_float(input, left, row, "GAP", game.crosshair.gap, 1.0f, 0.0f, 16.0f);
+    setting_row_float(input, left, row, "GAP [PX]", game.crosshair.gap, 1.0f, 0.0f, 16.0f);
     row += 42.0f;
-    setting_row_float(input, left, row, "THICK", game.crosshair.thickness, 1.0f, 1.0f, 6.0f);
+    setting_row_float(input, left, row, "THICK [PX]", game.crosshair.thickness, 1.0f, 1.0f, 6.0f);
     if (button(input, left, row + 74.0f, 250.0f, 46.0f, "SAVE GENERAL", 2.35f)) {
         save_settings(game);
     }
@@ -1737,6 +1953,8 @@ static bool self_test_check(bool condition, const char* message) {
 static int run_self_test() {
     bool ok = true;
 
+    ok = self_test_check(std::string(glyph('[')[0]) != "00000" && std::string(glyph(']')[0]) != "00000", "menu font draws unit brackets") && ok;
+
     Game game;
     ensure_presets(game);
     apply_selected_presets(game);
@@ -1804,6 +2022,7 @@ static int run_self_test() {
     game.wall_preset_name = "TINY PASU";
     game.wall_settings.target_count_min = 8;
     game.wall_settings.target_count_max = 8;
+    game.wall_settings.wall_distance = 6.25f;
     game.wall_settings.radius_min = 0.18f;
     game.wall_settings.radius_max = 0.22f;
     save_current_wall_preset(game);
@@ -1818,6 +2037,7 @@ static int run_self_test() {
     ok = self_test_check(!loaded.wall_presets.empty(), "saved wall presets load") && ok;
     ok = self_test_check(loaded.wall_preset_name == "TINY PASU", "selected named wall preset loads into editor") && ok;
     ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count range loads") && ok;
+    ok = self_test_check(std::fabs(loaded.wall_settings.wall_distance - 6.25f) < 0.0001f, "selected wall distance loads") && ok;
     ok = self_test_check(std::fabs(loaded.wall_settings.radius_max - 0.22f) < 0.0001f, "selected wall preset radius range loads") && ok;
 
     game.selected_wall_preset = 1;
@@ -1842,7 +2062,7 @@ static int run_self_test() {
     load_settings(old_loaded);
     ok = self_test_check(old_loaded.wall_preset_name == "OLD PASU", "old wall preset format loads") && ok;
     ok = self_test_check(old_loaded.wall_settings.target_count_min == 7 && old_loaded.wall_settings.target_count_max == 7, "old wall count migrates to fixed range") && ok;
-    ok = self_test_check(std::fabs(old_loaded.wall_settings.radius_min - 0.31f) < 0.0001f && std::fabs(old_loaded.wall_settings.radius_max - 0.31f) < 0.0001f, "old radius migrates to fixed range") && ok;
+    ok = self_test_check(std::fabs(old_loaded.wall_settings.radius_min - units_to_wall_meters(0.31f)) < 0.0001f && std::fabs(old_loaded.wall_settings.radius_max - units_to_wall_meters(0.31f)) < 0.0001f, "old radius migrates to fixed range") && ok;
     ok = self_test_check(std::fabs(old_loaded.wall_settings.change_min - 0.88f) < 0.0001f && std::fabs(old_loaded.wall_settings.change_max - 2.48f) < 0.0001f, "old direction interval migrates to randomized range") && ok;
 
     {
@@ -1857,14 +2077,72 @@ static int run_self_test() {
     Game legacy_loaded;
     load_settings(legacy_loaded);
     ok = self_test_check(legacy_loaded.wall_settings.target_count_min == 6 && legacy_loaded.wall_settings.target_count_max == 6, "legacy wall count key migrates to fixed range") && ok;
-    ok = self_test_check(std::fabs(legacy_loaded.wall_settings.horizontal_speed_min - 4.25f) < 0.0001f && std::fabs(legacy_loaded.wall_settings.horizontal_speed_max - 4.25f) < 0.0001f, "legacy horizontal speed key migrates to fixed range") && ok;
+    ok = self_test_check(std::fabs(legacy_loaded.wall_settings.horizontal_speed_min - units_to_wall_meters(4.25f)) < 0.0001f && std::fabs(legacy_loaded.wall_settings.horizontal_speed_max - units_to_wall_meters(4.25f)) < 0.0001f, "legacy horizontal speed key migrates to fixed range") && ok;
     ok = self_test_check(std::fabs(legacy_loaded.wall_settings.change_min - 0.66f) < 0.0001f && std::fabs(legacy_loaded.wall_settings.change_max - 1.86f) < 0.0001f, "legacy direction interval key migrates to randomized range") && ok;
+
+    {
+        std::ofstream actual_v2("build/self-test-settings.cfg");
+        actual_v2 << "version 2\n";
+        actual_v2 << "valorant_sens 0.5\n";
+        actual_v2 << "crosshair 9 4 2\n";
+        actual_v2 << "selected_wall 1\n";
+        actual_v2 << "selected_pill 0\n";
+        actual_v2 << "wall_preset \"1W6T STRAFE\" 6 0.12 4 0 20 1.6\n";
+        actual_v2 << "wall_preset \"1W4T DYNAMIC\" 4 0.24 6 2 20 1.6\n";
+        actual_v2 << "pill_preset \"SMOOTH PILL\" 1.24 4 12 0.35 2.4\n";
+    }
+    Game actual_v2_loaded;
+    load_settings(actual_v2_loaded);
+    ok = self_test_check(actual_v2_loaded.wall_preset_name == "1W4T DYNAMIC", "actual v2 selected wall preset remains selected") && ok;
+    ok = self_test_check(actual_v2_loaded.wall_settings.target_count_min == 4 && actual_v2_loaded.wall_settings.target_count_max == 4, "actual v2 wall target count is preserved") && ok;
+    ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.radius_min) - 0.24f) < 0.001f, "actual v2 wall radius preserves old internal size") && ok;
+    ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 wall horizontal speed preserves old internal speed") && ok;
+    ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.vertical_speed_min) - 2.0f) < 0.001f, "actual v2 wall vertical speed preserves old internal speed") && ok;
+    ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.acceleration_min) - 20.0f) < 0.001f, "actual v2 wall acceleration preserves old internal acceleration") && ok;
+    ok = self_test_check(std::fabs(wall_z_from_distance(actual_v2_loaded.wall_settings.wall_distance) - ROOM_WALL_Z) < 0.001f, "actual v2 wall distance defaults to old wall plane") && ok;
+    ok = self_test_check(actual_v2_loaded.pill_preset_name == "SMOOTH PILL", "actual v2 selected pill preset remains selected") && ok;
+    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.width) - 1.24f) < 0.001f, "actual v2 pill width preserves old internal size") && ok;
+    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.speed) - 4.0f) < 0.001f, "actual v2 pill speed preserves old internal speed") && ok;
+    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.acceleration) - 12.0f) < 0.001f, "actual v2 pill acceleration preserves old internal acceleration") && ok;
+    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.distance_min) - 7.5f) < 0.001f && std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.distance_max) - 10.5f) < 0.001f, "actual v2 pill distance defaults preserve old spawn band") && ok;
+    save_settings(actual_v2_loaded);
+    Game actual_v2_roundtrip;
+    load_settings(actual_v2_roundtrip);
+    ok = self_test_check(actual_v2_roundtrip.wall_preset_name == "1W4T DYNAMIC" && actual_v2_roundtrip.pill_preset_name == "SMOOTH PILL", "actual v2 save round trip preserves selected presets") && ok;
+    ok = self_test_check(std::fabs(wall_to_units(actual_v2_roundtrip.wall_settings.radius_min) - 0.24f) < 0.001f && std::fabs(wall_to_units(actual_v2_roundtrip.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 save round trip preserves wall behavior") && ok;
+    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_roundtrip.pill_settings.width) - 1.24f) < 0.001f && std::fabs(tracking_to_units(actual_v2_roundtrip.pill_settings.speed) - 4.0f) < 0.001f, "actual v2 save round trip preserves pill behavior") && ok;
+
+    {
+        std::ofstream high_accel("build/self-test-settings.cfg");
+        high_accel << "version 2\n";
+        high_accel << "pill_preset \"HIGH ACCEL\" 1.24 4 80 0.35 2.4\n";
+    }
+    Game high_accel_loaded;
+    load_settings(high_accel_loaded);
+    ok = self_test_check(std::fabs(tracking_to_units(high_accel_loaded.pill_settings.acceleration) - 80.0f) < 0.001f, "old high pill acceleration is preserved on load") && ok;
+    save_settings(high_accel_loaded);
+    Game high_accel_roundtrip;
+    load_settings(high_accel_roundtrip);
+    ok = self_test_check(std::fabs(tracking_to_units(high_accel_roundtrip.pill_settings.acceleration) - 80.0f) < 0.001f, "old high pill acceleration is preserved after save round trip") && ok;
+
+    {
+        std::ofstream high_speed("build/self-test-settings.cfg");
+        high_speed << "version 2\n";
+        high_speed << "pill_preset \"HIGH SPEED\" 1.24 14 12 0.35 2.4\n";
+    }
+    Game high_speed_loaded;
+    load_settings(high_speed_loaded);
+    ok = self_test_check(std::fabs(tracking_to_units(high_speed_loaded.pill_settings.speed) - 14.0f) < 0.001f, "old high pill speed is preserved on load") && ok;
+    save_settings(high_speed_loaded);
+    Game high_speed_roundtrip;
+    load_settings(high_speed_roundtrip);
+    ok = self_test_check(std::fabs(tracking_to_units(high_speed_roundtrip.pill_settings.speed) - 14.0f) < 0.001f, "old high pill speed is preserved after save round trip") && ok;
     std::remove(g_settings_path_override.c_str());
     g_settings_path_override.clear();
 
     Game physics;
-    physics.wall_settings.radius_min = 0.25f;
-    physics.wall_settings.radius_max = 0.25f;
+    physics.wall_settings.radius_min = 0.05f;
+    physics.wall_settings.radius_max = 0.05f;
     physics.wall_settings.horizontal_speed_min = 1.0f;
     physics.wall_settings.horizontal_speed_max = 1.0f;
     physics.wall_settings.vertical_speed_min = 0.0f;
@@ -1872,8 +2150,8 @@ static int run_self_test() {
     physics.wall_settings.acceleration_min = 0.0f;
     physics.wall_settings.acceleration_max = 0.0f;
     normalize_settings(physics);
-    physics.targets.push_back({{-0.5f, ROOM_EYE_HEIGHT, ROOM_WALL_Z + 0.45f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1000.0f, physics.wall_settings.radius_min});
-    physics.targets.push_back({{0.5f, ROOM_EYE_HEIGHT, ROOM_WALL_Z + 0.45f}, {-1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 1000.0f, physics.wall_settings.radius_min});
+    physics.targets.push_back({{-0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(physics.wall_settings.wall_distance) + 0.45f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1000.0f, wall_to_units(physics.wall_settings.radius_min)});
+    physics.targets.push_back({{0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(physics.wall_settings.wall_distance) + 0.45f}, {-1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 1000.0f, wall_to_units(physics.wall_settings.radius_min)});
     float before_a = physics.targets[0].vel.x;
     float before_b = physics.targets[1].vel.x;
     update_wall_targets(physics, 1.0f / 120.0f);
@@ -1888,8 +2166,9 @@ static int run_self_test() {
     collision.wall_settings.vertical_speed_max = 0.0f;
     collision.wall_settings.acceleration_min = 0.0f;
     collision.wall_settings.acceleration_max = 0.0f;
-    collision.targets.push_back({{-0.22f, ROOM_EYE_HEIGHT, ROOM_WALL_Z + 0.45f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, 1000.0f, collision.wall_settings.radius_min});
-    collision.targets.push_back({{0.22f, ROOM_EYE_HEIGHT + 0.05f, ROOM_WALL_Z + 0.45f}, {-2.0f, 0.0f, 0.0f}, {-2.0f, 0.0f, 0.0f}, 1000.0f, collision.wall_settings.radius_min});
+    float collision_radius = wall_to_units(collision.wall_settings.radius_min);
+    collision.targets.push_back({{-collision_radius * 0.88f, ROOM_EYE_HEIGHT, wall_z_from_distance(collision.wall_settings.wall_distance) + 0.45f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
+    collision.targets.push_back({{collision_radius * 0.88f, ROOM_EYE_HEIGHT + 0.05f, wall_z_from_distance(collision.wall_settings.wall_distance) + 0.45f}, {-2.0f, 0.0f, 0.0f}, {-2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
     update_wall_targets(collision, 1.0f / 120.0f);
     ok = self_test_check(std::fabs(collision.targets[0].vel.y) < 0.0001f && std::fabs(collision.targets[1].vel.y) < 0.0001f, "horizontal-only wall collisions do not create vertical movement") && ok;
 
@@ -1946,8 +2225,8 @@ static int run_self_test() {
     float first_v = -1.0f;
     for (int i = 0; i < 80; ++i) {
         Vec3 velocity = wall_desired_velocity(movement_sampling);
-        float h = std::fabs(velocity.x);
-        float v = std::fabs(velocity.y);
+        float h = units_to_wall_meters(std::fabs(velocity.x));
+        float v = units_to_wall_meters(std::fabs(velocity.y));
         if (i == 0) {
             first_h = h;
             first_v = v;
@@ -1969,16 +2248,141 @@ static int run_self_test() {
     }
     bool varied_radius = false;
     bool varied_accel = false;
-    float first_radius = movement_sampling.targets[0].radius;
-    float first_accel = movement_sampling.targets[0].acceleration;
+    float first_radius = units_to_wall_meters(movement_sampling.targets[0].radius);
+    float first_accel = units_to_wall_meters(movement_sampling.targets[0].acceleration);
     for (const Target& target : movement_sampling.targets) {
-        ok = self_test_check(target.radius >= 0.14f && target.radius <= 0.34f, "sampled wall target radius stays within range") && ok;
-        ok = self_test_check(target.acceleration >= 5.0f && target.acceleration <= 15.0f, "sampled wall target acceleration stays within range") && ok;
-        varied_radius = varied_radius || std::fabs(target.radius - first_radius) > 0.001f;
-        varied_accel = varied_accel || std::fabs(target.acceleration - first_accel) > 0.001f;
+        float radius_m = units_to_wall_meters(target.radius);
+        float accel_m = units_to_wall_meters(target.acceleration);
+        ok = self_test_check(radius_m >= 0.14f && radius_m <= 0.34f, "sampled wall target radius stays within range") && ok;
+        ok = self_test_check(accel_m >= 5.0f && accel_m <= 15.0f, "sampled wall target acceleration stays within range") && ok;
+        varied_radius = varied_radius || std::fabs(radius_m - first_radius) > 0.001f;
+        varied_accel = varied_accel || std::fabs(accel_m - first_accel) > 0.001f;
     }
     ok = self_test_check(varied_radius, "wall target sizes vary when radius min and max differ") && ok;
     ok = self_test_check(varied_accel, "wall target acceleration varies when acceleration min and max differ") && ok;
+
+    Game distance_test;
+    distance_test.wall_settings.wall_distance = 4.0f;
+    float near_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance);
+    distance_test.wall_settings.wall_distance = 8.0f;
+    float far_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance);
+    ok = self_test_check(far_wall_z < near_wall_z && std::fabs((near_wall_z - far_wall_z) - wall_to_units(4.0f)) < 0.001f, "wall distance moves wall by configured meters") && ok;
+
+    Game wall_far_plane_test;
+    init_scenarios(wall_far_plane_test);
+    wall_far_plane_test.scenario = wall_far_plane_test.scenarios[0];
+    wall_far_plane_test.wall_settings.wall_distance = 30.0f;
+    normalize_settings(wall_far_plane_test);
+    float far_width = wall_width_for_distance(wall_far_plane_test.wall_settings.wall_distance);
+    float far_height = wall_height_for_distance(wall_far_plane_test.wall_settings.wall_distance);
+    float far_radius = wall_to_units(wall_far_plane_test.wall_settings.radius_max);
+    Vec3 wall_eye = camera_pos(wall_far_plane_test);
+    float wall_required_far = std::sqrt(
+        (far_width * 0.5f + far_radius) * (far_width * 0.5f + far_radius) +
+        (std::fabs(far_height - wall_eye.y) + far_radius) * (std::fabs(far_height - wall_eye.y) + far_radius) +
+        (std::fabs(wall_z_from_distance(wall_far_plane_test.wall_settings.wall_distance) - far_radius - wall_eye.z)) *
+            (std::fabs(wall_z_from_distance(wall_far_plane_test.wall_settings.wall_distance) - far_radius - wall_eye.z))
+    );
+    ok = self_test_check(scene_far_plane(wall_far_plane_test) > wall_required_far, "far wall distance stays inside far clipping plane") && ok;
+
+    Game pill_distance_test;
+    pill_distance_test.rng.seed(321);
+    init_scenarios(pill_distance_test);
+    pill_distance_test.scenario = pill_distance_test.scenarios[1];
+    pill_distance_test.pill_settings.distance_min = 4.0f;
+    pill_distance_test.pill_settings.distance_max = 8.0f;
+    normalize_settings(pill_distance_test);
+    float pill_room_limit = tracking_room_half_size(pill_distance_test.pill_settings) - tracking_to_units(1.0f) - tracking_to_units(pill_distance_test.pill_settings.width) * 0.5f;
+    ok = self_test_check(pill_room_limit >= tracking_to_units(pill_distance_test.pill_settings.distance_max) - 0.001f, "tracking room boundary allows configured max pill distance") && ok;
+    ok = self_test_check(tracking_room_half_size(pill_distance_test.pill_settings) * 2.0f >= tracking_to_units(8.0f) * TRACKING_ROOM_SIDE_SCALE - 0.001f, "tracking room side length scales from max pill distance") && ok;
+    Game close_room_test;
+    close_room_test.pill_settings.distance_min = 1.5f;
+    close_room_test.pill_settings.distance_max = 4.0f;
+    normalize_settings(close_room_test);
+    float close_room_limit = tracking_room_half_size(close_room_test.pill_settings) - tracking_to_units(1.0f) - tracking_to_units(close_room_test.pill_settings.width) * 0.5f;
+    ok = self_test_check(close_room_limit >= tracking_to_units(close_room_test.pill_settings.distance_max) - 0.001f, "close tracking room boundary allows configured max pill distance") && ok;
+    ok = self_test_check(scene_far_plane(pill_distance_test) >= 120.0f, "tracking far plane remains at least the default range") && ok;
+    bool saw_near_pill_spawn = false;
+    bool saw_far_pill_spawn = false;
+    for (int i = 0; i < 80; ++i) {
+        Target target = spawn_pill_target(pill_distance_test);
+        float dist_m = units_to_tracking_meters(std::sqrt(target.pos.x * target.pos.x + target.pos.z * target.pos.z));
+        ok = self_test_check(dist_m >= 4.0f && dist_m <= 8.0f, "pill spawn distance stays within configured range") && ok;
+        saw_near_pill_spawn = saw_near_pill_spawn || dist_m < 5.0f;
+        saw_far_pill_spawn = saw_far_pill_spawn || dist_m > 7.0f;
+    }
+    ok = self_test_check(saw_near_pill_spawn && saw_far_pill_spawn, "pill spawn samples across configured distance range") && ok;
+    Vec3 outside_pos{tracking_to_units(8.2f), PLANE_EYE_HEIGHT, 0.0f};
+    Vec3 outside_vel = pill_desired_velocity_for_position(pill_distance_test, outside_pos);
+    ok = self_test_check(dot(outside_vel, {outside_pos.x, 0.0f, outside_pos.z}) < 0.0f, "pill direction near max distance points inward") && ok;
+    Vec3 inside_pos{tracking_to_units(3.9f), PLANE_EYE_HEIGHT, 0.0f};
+    Vec3 inside_vel = pill_desired_velocity_for_position(pill_distance_test, inside_pos);
+    ok = self_test_check(dot(inside_vel, {inside_pos.x, 0.0f, inside_pos.z}) > 0.0f, "pill direction near min distance points outward") && ok;
+
+    Game narrow_band_test;
+    narrow_band_test.rng.seed(44);
+    narrow_band_test.pill_settings.distance_min = 4.0f;
+    narrow_band_test.pill_settings.distance_max = 4.0f;
+    normalize_settings(narrow_band_test);
+    Vec3 narrow_outer_pos{tracking_to_units(4.05f), PLANE_EYE_HEIGHT, 0.0f};
+    Vec3 narrow_outer_vel = pill_desired_velocity_for_position(narrow_band_test, narrow_outer_pos);
+    ok = self_test_check(dot(narrow_outer_vel, {narrow_outer_pos.x, 0.0f, narrow_outer_pos.z}) < 0.0f, "narrow pill band steers inward outside fixed radius") && ok;
+    Vec3 narrow_inner_pos{tracking_to_units(3.95f), PLANE_EYE_HEIGHT, 0.0f};
+    Vec3 narrow_inner_vel = pill_desired_velocity_for_position(narrow_band_test, narrow_inner_pos);
+    ok = self_test_check(dot(narrow_inner_vel, {narrow_inner_pos.x, 0.0f, narrow_inner_pos.z}) > 0.0f, "narrow pill band steers outward inside fixed radius") && ok;
+    Vec3 narrow_exact_pos{tracking_to_units(4.0f), PLANE_EYE_HEIGHT, 0.0f};
+    Vec3 narrow_exact_vel = pill_desired_velocity_for_position(narrow_band_test, narrow_exact_pos);
+    ok = self_test_check(std::fabs(dot(narrow_exact_vel, {narrow_exact_pos.x, 0.0f, narrow_exact_pos.z})) < 0.001f, "fixed-radius pill band chooses tangential movement at boundary") && ok;
+
+    Game close_distance_test;
+    close_distance_test.pill_settings.distance_min = 1.5f;
+    close_distance_test.pill_settings.distance_max = 4.0f;
+    close_distance_test.pill_settings.speed = 0.5f;
+    close_distance_test.pill_settings.acceleration = 20.0f;
+    normalize_settings(close_distance_test);
+    close_distance_test.targets.push_back({
+        {tracking_to_units(1.6f), PLANE_EYE_HEIGHT, 0.0f},
+        {-tracking_to_units(0.4f), 0.0f, 0.0f},
+        {-tracking_to_units(0.4f), 0.0f, 0.0f},
+        10.0f,
+        tracking_to_units(close_distance_test.pill_settings.width) * 0.5f
+    });
+    update_pill_target(close_distance_test, 1.0f / 120.0f);
+    ok = self_test_check(close_distance_test.targets[0].vel.x < 0.0f, "pill close distance uses configured min without hidden camera bounce") && ok;
+
+    Game radial_max_test;
+    radial_max_test.pill_settings.distance_min = 2.0f;
+    radial_max_test.pill_settings.distance_max = 4.0f;
+    radial_max_test.pill_settings.speed = 4.0f;
+    radial_max_test.pill_settings.acceleration = 0.05f;
+    normalize_settings(radial_max_test);
+    radial_max_test.targets.push_back({
+        {tracking_to_units(3.98f), PLANE_EYE_HEIGHT, 0.0f},
+        {tracking_to_units(2.0f), 0.0f, 0.0f},
+        {tracking_to_units(2.0f), 0.0f, 0.0f},
+        10.0f,
+        tracking_to_units(radial_max_test.pill_settings.width) * 0.5f
+    });
+    update_pill_target(radial_max_test, 1.0f);
+    float radial_max_dist = units_to_tracking_meters(std::sqrt(radial_max_test.targets[0].pos.x * radial_max_test.targets[0].pos.x + radial_max_test.targets[0].pos.z * radial_max_test.targets[0].pos.z));
+    ok = self_test_check(radial_max_dist <= 4.001f && radial_max_test.targets[0].vel.x <= 0.001f, "pill cannot drift past configured max distance under low acceleration") && ok;
+
+    Game radial_min_test;
+    radial_min_test.pill_settings.distance_min = 2.0f;
+    radial_min_test.pill_settings.distance_max = 4.0f;
+    radial_min_test.pill_settings.speed = 4.0f;
+    radial_min_test.pill_settings.acceleration = 0.05f;
+    normalize_settings(radial_min_test);
+    radial_min_test.targets.push_back({
+        {tracking_to_units(2.02f), PLANE_EYE_HEIGHT, 0.0f},
+        {-tracking_to_units(2.0f), 0.0f, 0.0f},
+        {-tracking_to_units(2.0f), 0.0f, 0.0f},
+        10.0f,
+        tracking_to_units(radial_min_test.pill_settings.width) * 0.5f
+    });
+    update_pill_target(radial_min_test, 1.0f);
+    float radial_min_dist = units_to_tracking_meters(std::sqrt(radial_min_test.targets[0].pos.x * radial_min_test.targets[0].pos.x + radial_min_test.targets[0].pos.z * radial_min_test.targets[0].pos.z));
+    ok = self_test_check(radial_min_dist >= 1.999f && radial_min_test.targets[0].vel.x >= -0.001f, "pill cannot drift inside configured min distance under low acceleration") && ok;
 
     Game count_sampling;
     count_sampling.rng.seed(789);
@@ -2146,14 +2550,15 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
         game.wall_preset_name = "MAX RANGE STRESS TEST";
         game.wall_settings.target_count_min = 18;
         game.wall_settings.target_count_max = 18;
-        game.wall_settings.radius_min = 0.88f;
-        game.wall_settings.radius_max = 0.90f;
-        game.wall_settings.horizontal_speed_min = 11.75f;
-        game.wall_settings.horizontal_speed_max = 12.00f;
-        game.wall_settings.vertical_speed_min = 11.75f;
-        game.wall_settings.vertical_speed_max = 12.00f;
-        game.wall_settings.acceleration_min = 79.0f;
-        game.wall_settings.acceleration_max = 80.0f;
+        game.wall_settings.wall_distance = 30.0f;
+        game.wall_settings.radius_min = 0.44f;
+        game.wall_settings.radius_max = 0.45f;
+        game.wall_settings.horizontal_speed_min = 7.90f;
+        game.wall_settings.horizontal_speed_max = 8.00f;
+        game.wall_settings.vertical_speed_min = 7.90f;
+        game.wall_settings.vertical_speed_max = 8.00f;
+        game.wall_settings.acceleration_min = 39.5f;
+        game.wall_settings.acceleration_max = 40.0f;
         game.wall_settings.change_min = 11.90f;
         game.wall_settings.change_max = 12.00f;
         normalize_settings(game);
