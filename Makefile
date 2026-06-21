@@ -1,4 +1,4 @@
-APP_NAME := Valorant Aim Trainer
+APP_NAME := Aim Trainer
 BIN_NAME := aim-trainer
 SRC_DIR := src
 BUILD_DIR := build
@@ -55,7 +55,7 @@ app: $(BIN)
 	'  <key>CFBundleExecutable</key>' \
 	'  <string>$(BIN_NAME)</string>' \
 	'  <key>CFBundleIdentifier</key>' \
-	'  <string>local.valorant-aim-trainer</string>' \
+	'  <string>local.aim-trainer</string>' \
 	'  <key>CFBundleName</key>' \
 	'  <string>$(APP_NAME)</string>' \
 	'  <key>CFBundlePackageType</key>' \

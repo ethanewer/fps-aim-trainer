@@ -7,8 +7,8 @@
 
 #include "math.hpp"
 
-inline constexpr float VALORANT_HORIZONTAL_FOV_DEG = 103.0f;
-inline constexpr float VALORANT_YAW_DEG_PER_COUNT = 0.07f;
+inline constexpr float HORIZONTAL_FOV_DEG = 103.0f;
+inline constexpr float YAW_DEG_PER_COUNT = 0.07f;
 inline constexpr float ROOM_WALL_Z = -16.0f;
 inline constexpr float ROOM_BACK_Z = 8.0f;
 inline constexpr float ROOM_WIDTH = 28.0f;
@@ -157,7 +157,7 @@ struct Game {
     Stats stats;
     float yaw = 0.0f;
     float pitch = 0.0f;
-    float valorant_sens = 0.35f;
+    float sensitivity = 0.35f;
     CrosshairSettings crosshair;
     WallClickSettings wall_settings;
     PillTrackingSettings pill_settings;

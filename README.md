@@ -1,4 +1,4 @@
-# Valorant Aim Trainer
+# Aim Trainer
 
 Lightweight native FPS aim trainer prototype.
 
@@ -20,11 +20,11 @@ In the menu:
 - `START` launches the scenario; `SAVE PRESET` / `SAVE GENERAL` persist settings.
 - Esc on the menu (with nothing being edited) quits.
 
-## Valorant Mapping
+## Sensitivity Mapping
 
 - Horizontal FOV is locked to 103 degrees.
-- The sensitivity value shown in the menu is the Valorant in-game sensitivity number.
-- Mouse rotation uses `0.07 degrees per mouse count * Valorant sensitivity`.
+- The sensitivity value shown in the menu is your in-game sensitivity number.
+- Mouse rotation uses `0.07 degrees per mouse count * sensitivity`.
 
 ## Build
 
@@ -34,14 +34,14 @@ macOS:
 make app
 ```
 
-The app bundle is written to `~/Desktop/Valorant Aim Trainer.app`.
+The app bundle is written to `~/Desktop/Aim Trainer.app`.
 
 ## Modes And Settings
 
 - Wall clicking: wall distance, target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking.
 - 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
-- Settings are saved to `~/.valorant_aim_trainer.cfg` on macOS/Linux.
+- Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
 - User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
 
 Linux:

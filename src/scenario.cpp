@@ -402,7 +402,7 @@ void update_pill_target(Game& game, float dt) {
 }
 
 void update_playing(Game& game, const Input& input, float dt) {
-    float radians_per_count = deg_to_rad(VALORANT_YAW_DEG_PER_COUNT * game.valorant_sens);
+    float radians_per_count = deg_to_rad(YAW_DEG_PER_COUNT * game.sensitivity);
     game.yaw += static_cast<float>(input.rel_x) * radians_per_count;
     game.pitch = clampf(game.pitch - static_cast<float>(input.rel_y) * radians_per_count, -1.45f, 1.45f);
     game.stats.elapsed += dt;

@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
         return rc;
     }
 
-    SDL_Window* window = create_gl_window("Valorant Aim Trainer", 1280, 720, true);
+    SDL_Window* window = create_gl_window("Aim Trainer", 1280, 720, true);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();

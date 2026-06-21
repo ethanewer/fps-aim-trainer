@@ -10,7 +10,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <iterator>
 #include <string>
 
 #include "config.hpp"
@@ -84,7 +83,7 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::PillAccel: return f_float(&g.pill_settings.acceleration, 0.0f, pill_acceleration_max_meters(), 2);
         case FieldId::PillDirMin: return f_float(&g.pill_settings.change_min, 0.05f, 8.0f, 2);
         case FieldId::PillDirMax: return f_float(&g.pill_settings.change_max, 0.05f, 12.0f, 2);
-        case FieldId::GenSens: return f_float(&g.valorant_sens, 0.001f, 10.0f, 3);
+        case FieldId::GenSens: return f_float(&g.sensitivity, 0.001f, 10.0f, 3);
         case FieldId::GenLength: return f_float(&g.crosshair.length, 4.0f, 24.0f, 0);
         case FieldId::GenGap: return f_float(&g.crosshair.gap, 0.0f, 16.0f, 0);
         case FieldId::GenThick: return f_float(&g.crosshair.thickness, 1.0f, 6.0f, 0);
@@ -186,9 +185,9 @@ static const FieldId GEN_ORDER[] = {
 
 static void tab_field_order(MenuTab tab, const FieldId** order, int* count) {
     switch (tab) {
-        case MenuTab::Clicking: *order = WALL_ORDER; *count = static_cast<int>(std::size(WALL_ORDER)); break;
-        case MenuTab::Tracking: *order = PILL_ORDER; *count = static_cast<int>(std::size(PILL_ORDER)); break;
-        default: *order = GEN_ORDER; *count = static_cast<int>(std::size(GEN_ORDER)); break;
+        case MenuTab::Clicking: *order = WALL_ORDER; *count = static_cast<int>(sizeof(WALL_ORDER) / sizeof(WALL_ORDER[0])); break;
+        case MenuTab::Tracking: *order = PILL_ORDER; *count = static_cast<int>(sizeof(PILL_ORDER) / sizeof(PILL_ORDER[0])); break;
+        default: *order = GEN_ORDER; *count = static_cast<int>(sizeof(GEN_ORDER) / sizeof(GEN_ORDER[0])); break;
     }
 }
 
@@ -614,7 +613,7 @@ static void draw_general_tab(Game& g, const Input& in, float left) {
     float box_h = 34.0f;
 
     float sens_y = CARD_Y + 64.0f;
-    field_label(cl, sens_y + (box_h - GLYPH_H) * 0.5f, "VALORANT SENS");
+    field_label(cl, sens_y + (box_h - GLYPH_H) * 0.5f, "SENSITIVITY");
     value_box(g, in, FieldId::GenSens, value_x, sens_y, 130.0f, box_h);
 
     divider(cl, CARD_Y + 112.0f, w - 32.0f);
@@ -667,9 +666,9 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
     glTranslatef(0.0f, voff, 0.0f);
 
     float left = std::max(42.0f, base_w * 0.5f - 520.0f);
-    text(left, 58.0f, "VALORANT AIM TRAINER", 4.7f, 235, 240, 245);
+    text(left, 58.0f, "AIM TRAINER", 4.7f, 235, 240, 245);
     text(left, 110.0f, "FOV LOCKED TO 103 HORIZONTAL", 2.0f, 150, 162, 178);
-    text(left, 134.0f, "SENSITIVITY USES VALORANT UNITS", 2.0f, 150, 162, 178);
+    text(left, 134.0f, "MATCH YOUR IN-GAME SENSITIVITY", 2.0f, 150, 162, 178);
 
     float tabs_y = 170.0f;
     tab_button(game, ui_input, left, tabs_y, "CLICKING", MenuTab::Clicking);

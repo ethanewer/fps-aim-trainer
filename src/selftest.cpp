@@ -166,13 +166,13 @@ int run_self_test() {
     game.wall_settings.radius_min = 0.18f;
     game.wall_settings.radius_max = 0.22f;
     save_current_wall_preset(game);
-    game.valorant_sens = 0.777f;
+    game.sensitivity = 0.777f;
     game.crosshair = {14.0f, 6.0f, 3.0f};
     save_settings(game);
 
     Game loaded;
     load_settings(loaded);
-    ok = self_test_check(std::fabs(loaded.valorant_sens - 0.777f) < 0.0001f, "saved general sensitivity loads") && ok;
+    ok = self_test_check(std::fabs(loaded.sensitivity - 0.777f) < 0.0001f, "saved general sensitivity loads") && ok;
     ok = self_test_check(std::fabs(loaded.crosshair.length - 14.0f) < 0.0001f, "saved crosshair loads") && ok;
     ok = self_test_check(!loaded.wall_presets.empty(), "saved wall presets load") && ok;
     ok = self_test_check(loaded.wall_preset_name == "TINY PASU", "selected named wall preset loads into editor") && ok;
@@ -184,11 +184,11 @@ int run_self_test() {
     apply_selected_presets(game);
     float selected_radius = game.wall_settings.radius_min;
     game.wall_settings.radius_min = 0.88f;
-    game.valorant_sens = 0.555f;
+    game.sensitivity = 0.555f;
     save_settings(game);
     Game general_only_loaded;
     load_settings(general_only_loaded);
-    ok = self_test_check(std::fabs(general_only_loaded.valorant_sens - 0.555f) < 0.0001f, "general save persists sensitivity") && ok;
+    ok = self_test_check(std::fabs(general_only_loaded.sensitivity - 0.555f) < 0.0001f, "general save persists sensitivity") && ok;
     ok = self_test_check(std::fabs(general_only_loaded.wall_settings.radius_min - selected_radius) < 0.0001f, "general save does not silently overwrite selected wall preset") && ok;
 
     {
@@ -223,7 +223,7 @@ int run_self_test() {
     {
         std::ofstream actual_v2("build/self-test-settings.cfg");
         actual_v2 << "version 2\n";
-        actual_v2 << "valorant_sens 0.5\n";
+        actual_v2 << "sensitivity 0.5\n";
         actual_v2 << "crosshair 9 4 2\n";
         actual_v2 << "selected_wall 1\n";
         actual_v2 << "selected_pill 0\n";

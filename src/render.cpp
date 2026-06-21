@@ -182,7 +182,7 @@ static void draw_target(const Target& target, ScenarioKind kind) {
 
 static void begin_3d(const Game& game, int w, int h) {
     float aspect = static_cast<float>(w) / static_cast<float>(std::max(1, h));
-    float vertical_fov = rad_to_deg(2.0f * std::atan(std::tan(deg_to_rad(VALORANT_HORIZONTAL_FOV_DEG) * 0.5f) / aspect));
+    float vertical_fov = rad_to_deg(2.0f * std::atan(std::tan(deg_to_rad(HORIZONTAL_FOV_DEG) * 0.5f) / aspect));
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -382,7 +382,7 @@ void draw_world(const Game& game, int w, int h) {
     rect(cx - thick * 0.5f, cy - gap - len, thick, len, 245, 248, 252);
     rect(cx - thick * 0.5f, cy + gap, thick, len, 245, 248, 252);
     char line[160];
-    std::snprintf(line, sizeof(line), "FOV 103  SENS %.3f", game.valorant_sens);
+    std::snprintf(line, sizeof(line), "FOV 103  SENS %.3f", game.sensitivity);
     std::string sens_line = line;
     std::string stat_line;
     if (game.scenario.kind == ScenarioKind::WallClick) {

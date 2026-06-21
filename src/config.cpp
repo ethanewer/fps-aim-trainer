@@ -100,7 +100,7 @@ void normalize_settings(Game& game) {
     normalize_wall_settings(game, game.wall_settings);
     normalize_pill_settings(game.pill_settings);
     normalize_crosshair(game.crosshair);
-    game.valorant_sens = clampf(game.valorant_sens, 0.001f, 10.0f);
+    game.sensitivity = clampf(game.sensitivity, 0.001f, 10.0f);
     for (WallPreset& preset : game.wall_presets) {
         preset.name = sanitize_preset_name(preset.name);
         if (preset.name == "MIGRATED CLICK") {
@@ -183,15 +183,15 @@ std::string settings_path() {
 #ifdef _WIN32
     const char* base = std::getenv("APPDATA");
     if (base) {
-        return std::string(base) + "\\valorant_aim_trainer.cfg";
+        return std::string(base) + "\\aim_trainer.cfg";
     }
-    return "valorant_aim_trainer.cfg";
+    return "aim_trainer.cfg";
 #else
     const char* home = std::getenv("HOME");
     if (home) {
-        return std::string(home) + "/.valorant_aim_trainer.cfg";
+        return std::string(home) + "/.aim_trainer.cfg";
     }
-    return ".valorant_aim_trainer.cfg";
+    return ".aim_trainer.cfg";
 #endif
 }
 
@@ -204,7 +204,7 @@ void save_settings(const Game& game) {
         return;
     }
     out << "version 4\n";
-    out << "valorant_sens " << normalized.valorant_sens << "\n";
+    out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
     out << "selected_pill " << normalized.selected_pill_preset << "\n";
@@ -256,8 +256,8 @@ void load_settings(Game& game) {
             row >> settings_version;
             continue;
         }
-        if (key == "valorant_sens") {
-            row >> game.valorant_sens;
+        if (key == "sensitivity") {
+            row >> game.sensitivity;
         } else if (key == "crosshair") {
             row >> game.crosshair.length >> game.crosshair.gap >> game.crosshair.thickness;
         } else if (key == "selected_wall") {
