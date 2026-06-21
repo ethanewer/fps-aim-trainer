@@ -1,0 +1,9 @@
+build/
+target/
+debug-shots/
+
+*.o
+*.dSYM/
+*.app/
+
+.DS_Store
