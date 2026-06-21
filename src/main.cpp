@@ -30,6 +30,13 @@ struct WindowSize {
     int h;
 };
 
+struct AudioState {
+    SDL_AudioDeviceID device = 0;
+    SDL_AudioSpec spec{};
+    std::vector<float> hit_samples;
+    bool failed = false;
+};
+
 static void set_platform_hints() {
 #ifdef _WIN32
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
@@ -82,6 +89,80 @@ static void sync_text_input(const Game& game) {
         SDL_StartTextInput();
     } else if (!wants_text && active == SDL_TRUE) {
         SDL_StopTextInput();
+    }
+}
+
+static std::vector<float> make_hit_samples(const SDL_AudioSpec& spec) {
+    constexpr float two_pi = 6.28318530718f;
+    int channels = std::max(1, static_cast<int>(spec.channels));
+    constexpr float duration = 0.034f;
+    int frames = std::max(1, static_cast<int>(static_cast<float>(spec.freq) * duration));
+    std::vector<float> samples(static_cast<size_t>(frames) * static_cast<size_t>(channels));
+    for (int frame = 0; frame < frames; ++frame) {
+        float t = static_cast<float>(frame) / static_cast<float>(spec.freq);
+        float attack = std::min(1.0f, t / 0.0009f);
+        float fade = std::max(0.0f, 1.0f - t / duration);
+        fade *= fade;
+        float body = std::sin(two_pi * 520.0f * t) + 0.24f * std::sin(two_pi * 780.0f * t);
+        float snap = std::sin(two_pi * 980.0f * t + 0.72f);
+        float sample = body * attack * std::exp(-t * 62.0f) * fade * 0.25f;
+        sample += snap * attack * std::exp(-t * 155.0f) * fade * 0.075f;
+        for (int channel = 0; channel < channels; ++channel) {
+            samples[static_cast<size_t>(frame) * static_cast<size_t>(channels) + static_cast<size_t>(channel)] = sample;
+        }
+    }
+    return samples;
+}
+
+static bool init_audio(AudioState& audio) {
+    if (audio.device != 0) {
+        return true;
+    }
+    if (audio.failed) {
+        return false;
+    }
+    if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 && SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        audio.failed = true;
+        std::fprintf(stderr, "SDL audio init failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    SDL_AudioSpec want{};
+    want.freq = 48000;
+    want.format = AUDIO_F32SYS;
+    want.channels = 1;
+    want.samples = 256;
+    audio.device = SDL_OpenAudioDevice(nullptr, 0, &want, &audio.spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    if (audio.device == 0) {
+        audio.failed = true;
+        std::fprintf(stderr, "SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
+        return false;
+    }
+    audio.hit_samples = make_hit_samples(audio.spec);
+    SDL_PauseAudioDevice(audio.device, 0);
+    return true;
+}
+
+static void play_pending_hit_sounds(AudioState& audio, Game& game) {
+    int count = std::min(game.pending_hit_sounds, 4);
+    game.pending_hit_sounds = 0;
+    if (count <= 0 || !init_audio(audio) || audio.hit_samples.empty()) {
+        return;
+    }
+
+    uint32_t bytes = static_cast<uint32_t>(audio.hit_samples.size() * sizeof(float));
+    if (SDL_GetQueuedAudioSize(audio.device) > bytes * 5) {
+        SDL_ClearQueuedAudio(audio.device);
+    }
+    for (int i = 0; i < count; ++i) {
+        SDL_QueueAudio(audio.device, audio.hit_samples.data(), bytes);
+    }
+}
+
+static void shutdown_audio(AudioState& audio) {
+    if (audio.device != 0) {
+        SDL_CloseAudioDevice(audio.device);
+        audio.device = 0;
     }
 }
 
@@ -290,7 +371,7 @@ static bool render_debug_results(const std::string& path, int width, int height,
     ScenarioKind kind = scenario_index == 1 ? ScenarioKind::PillTracking : ScenarioKind::WallClick;
     RunRecord previous;
     previous.kind = kind;
-    previous.preset_name = "PASU FIVE";
+    previous.preset_name = "1W3T DYNAMIC";
     previous.score = 38;
     previous.shots = 52;
     previous.accuracy = 73.1f;
@@ -428,9 +509,11 @@ int main(int argc, char** argv) {
     load_settings(game);
     load_runs(game);
     init_scenarios(game);
+    AudioState audio;
 
     uint64_t last = SDL_GetPerformanceCounter();
     bool running = true;
+    bool audio_warmed = false;
     while (running) {
         Input input;
         SDL_Event event;
@@ -487,6 +570,7 @@ int main(int argc, char** argv) {
         if (game.mode == AppMode::Playing) {
             set_mouse_grab(game, true);
             update_playing(game, input, dt);
+            play_pending_hit_sounds(audio, game);
             if (game.mode == AppMode::Playing) {
                 draw_world(game, drawable_w, drawable_h);
             } else {
@@ -504,11 +588,16 @@ int main(int argc, char** argv) {
         }
 
         SDL_GL_SwapWindow(window);
+        if (!audio_warmed) {
+            init_audio(audio);
+            audio_warmed = true;
+        }
         sync_text_input(game);
     }
 
     set_mouse_grab(game, false);
     SDL_StopTextInput();
+    shutdown_audio(audio);
     SDL_GL_DeleteContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();

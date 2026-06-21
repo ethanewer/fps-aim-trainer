@@ -67,8 +67,8 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::WallDistMax: return f_float(&g.wall_settings.wall_distance_max, 2.0f, 30.0f, 2);
         case FieldId::WallTargetsMin: return f_int(&g.wall_settings.target_count_min, 1, capacity);
         case FieldId::WallTargetsMax: return f_int(&g.wall_settings.target_count_max, 1, capacity);
-        case FieldId::WallRadiusMin: return f_float(&g.wall_settings.radius_min, 0.03f, 0.45f, 2);
-        case FieldId::WallRadiusMax: return f_float(&g.wall_settings.radius_max, 0.03f, 0.45f, 2);
+        case FieldId::WallRadiusMin: return f_float(&g.wall_settings.radius_min, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M, 2);
+        case FieldId::WallRadiusMax: return f_float(&g.wall_settings.radius_max, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M, 2);
         case FieldId::WallHSpeedMin: return f_float(&g.wall_settings.horizontal_speed_min, 0.0f, 8.0f, 2);
         case FieldId::WallHSpeedMax: return f_float(&g.wall_settings.horizontal_speed_max, 0.0f, 8.0f, 2);
         case FieldId::WallVSpeedMin: return f_float(&g.wall_settings.vertical_speed_min, 0.0f, 8.0f, 2);
@@ -89,6 +89,12 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::GenLength: return f_float(&g.crosshair.length, 4.0f, 24.0f, 0);
         case FieldId::GenGap: return f_float(&g.crosshair.gap, 0.0f, 16.0f, 0);
         case FieldId::GenThick: return f_float(&g.crosshair.thickness, 1.0f, 6.0f, 0);
+        case FieldId::GenTargetR: return f_int(&g.target_color.r, 0, 255);
+        case FieldId::GenTargetG: return f_int(&g.target_color.g, 0, 255);
+        case FieldId::GenTargetB: return f_int(&g.target_color.b, 0, 255);
+        case FieldId::GenWallR: return f_int(&g.wall_color.r, 0, 255);
+        case FieldId::GenWallG: return f_int(&g.wall_color.g, 0, 255);
+        case FieldId::GenWallB: return f_int(&g.wall_color.b, 0, 255);
         default: return FieldDesc{};
     }
 }
@@ -183,6 +189,8 @@ static const FieldId PILL_ORDER[] = {
 };
 static const FieldId GEN_ORDER[] = {
     FieldId::GenSens, FieldId::GenLength, FieldId::GenGap, FieldId::GenThick,
+    FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB,
+    FieldId::GenWallR, FieldId::GenWallG, FieldId::GenWallB,
 };
 
 static void tab_field_order(MenuTab tab, const FieldId** order, int* count) {
@@ -304,7 +312,7 @@ void new_pill_preset(Game& game) {
 void delete_wall_preset(Game& game) {
     game.active_field = FieldId::None;
     if (game.wall_presets.size() <= 1) {
-        game.wall_presets[0] = {"PASU FIVE", WallClickSettings{}};
+        game.wall_presets[0] = {"1W3T DYNAMIC", WallClickSettings{}};
         game.selected_wall_preset = 0;
     } else {
         game.wall_presets.erase(game.wall_presets.begin() + game.selected_wall_preset);
@@ -450,6 +458,22 @@ static void row_range(Game& g, const Input& in, float label_x, float min_x, floa
     value_box(g, in, max_id, max_x, row_y, box_w, box_h);
 }
 
+static void color_swatch(int r, int g, int b, float x, float y, float w, float h) {
+    rect(x, y, w, h, 92, 104, 122);
+    rect(x + 2.0f, y + 2.0f, w - 4.0f, h - 4.0f,
+         static_cast<uint8_t>(r),
+         static_cast<uint8_t>(g),
+         static_cast<uint8_t>(b));
+}
+
+static void color_row(Game& g, const Input& in, float label_x, float value_x, float row_y, const std::string& label, FieldId r_id, FieldId g_id, FieldId b_id, int r, int green, int b) {
+    field_label(label_x, row_y + 10.0f, label);
+    value_box(g, in, r_id, value_x, row_y, 68.0f, 34.0f);
+    value_box(g, in, g_id, value_x + 98.0f, row_y, 68.0f, 34.0f);
+    value_box(g, in, b_id, value_x + 196.0f, row_y, 68.0f, 34.0f);
+    color_swatch(r, green, b, value_x + 306.0f, row_y, 84.0f, 34.0f);
+}
+
 // ---------------------------------------------------------------------------
 // Tab content.
 // ---------------------------------------------------------------------------
@@ -483,9 +507,10 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x, bool tracking
         }
         const std::string& name = tracking ? g.pill_presets[index].name : g.wall_presets[index].name;
         bool is_selected = index == selected;
-        bool clicked = list_button(in, row_x, list_y + row * 40.0f, row_w, 34.0f, name, is_selected);
+        float y = list_y + row * 40.0f;
+        bool clicked = list_button(in, row_x, y, row_w, 34.0f, name, is_selected);
         if (is_selected) {
-            rect(row_x, list_y + row * 40.0f, 4.0f, 34.0f, 255, 70, 85);  // accent bar
+            rect(row_x, y, 4.0f, 34.0f, 255, 70, 85);  // accent bar
         }
         if (clicked) {
             menu_blur_field(g);
@@ -632,6 +657,10 @@ static void draw_general_tab(Game& g, const Input& in, float left) {
     draw_card(left, CARD_Y, w, CARD_H);
     float cl = left + 16.0f;
     text(cl, CARD_Y + 14.0f, "GENERAL", 2.8f, 230, 236, 244);
+    if (primary_button(in, left + w - 276.0f, CARD_Y + 12.0f, 260.0f, 40.0f, "SAVE GENERAL", 2.25f)) {
+        menu_blur_field(g);
+        save_settings(g);
+    }
 
     float value_x = cl + 280.0f;
     float box_h = 34.0f;
@@ -641,21 +670,23 @@ static void draw_general_tab(Game& g, const Input& in, float left) {
     value_box(g, in, FieldId::GenSens, value_x, sens_y, 130.0f, box_h);
 
     divider(cl, CARD_Y + 112.0f, w - 32.0f);
-    text(cl, CARD_Y + 128.0f, "CROSSHAIR", 2.6f, 230, 236, 244);
+    text(cl, CARD_Y + 126.0f, "CROSSHAIR", 2.6f, 230, 236, 244);
 
-    float row_y = CARD_Y + 176.0f;
-    const float pitch = 52.0f;
+    float row_y = CARD_Y + 166.0f;
+    const float pitch = 44.0f;
     row_single(g, in, cl, value_x, row_y, "LENGTH [PX]", FieldId::GenLength, 130.0f, box_h); row_y += pitch;
     row_single(g, in, cl, value_x, row_y, "GAP [PX]", FieldId::GenGap, 130.0f, box_h); row_y += pitch;
     row_single(g, in, cl, value_x, row_y, "THICKNESS [PX]", FieldId::GenThick, 130.0f, box_h);
 
-    divider(cl, CARD_Y + 344.0f, w - 32.0f);
-    if (primary_button(in, cl, CARD_Y + 360.0f, 260.0f, 44.0f, "SAVE GENERAL", 2.35f)) {
-        menu_blur_field(g);
-        save_settings(g);
-    }
-    text(cl + 280.0f, CARD_Y + 372.0f, "STORES SENSITIVITY AND CROSSHAIR", 1.7f, 150, 162, 178);
-    text(cl, CARD_Y + CARD_H - 30.0f, "TAB NEXT BOX   ENTER COMMITS   ESC CANCELS", 1.7f, 150, 162, 178);
+    divider(cl, CARD_Y + 302.0f, w - 32.0f);
+    text(cl, CARD_Y + 318.0f, "COLORS", 2.6f, 230, 236, 244);
+
+    float color_y = CARD_Y + 358.0f;
+    text(value_x + 34.0f - text_width("R", 1.5f) * 0.5f, color_y - 17.0f, "R", 1.5f, 150, 162, 178);
+    text(value_x + 132.0f - text_width("G", 1.5f) * 0.5f, color_y - 17.0f, "G", 1.5f, 150, 162, 178);
+    text(value_x + 230.0f - text_width("B", 1.5f) * 0.5f, color_y - 17.0f, "B", 1.5f, 150, 162, 178);
+    color_row(g, in, cl, value_x, color_y, "TARGET", FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB, g.target_color.r, g.target_color.g, g.target_color.b);
+    color_row(g, in, cl, value_x, color_y + 42.0f, "WALL", FieldId::GenWallR, FieldId::GenWallG, FieldId::GenWallB, g.wall_color.r, g.wall_color.g, g.wall_color.b);
 }
 
 // ---------------------------------------------------------------------------

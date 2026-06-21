@@ -1,3 +1,7 @@
+param(
+    [switch]$UpdateStable
+)
+
 . "$PSScriptRoot\windows-common.ps1"
 
 Build-WindowsApp
@@ -57,18 +61,48 @@ if (-not (Test-Path -LiteralPath $iconPath)) {
 }
 
 $desktop = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktop "Aim Trainer.lnk"
+$devShortcutPath = Join-Path $desktop "Aim Trainer Dev.lnk"
+$stableShortcutPath = Join-Path $desktop "Aim Trainer.lnk"
 $powershell = Join-Path $PSHOME "powershell.exe"
 $runScript = Join-Path $PSScriptRoot "windows-run.ps1"
+$stableDir = Join-Path $Script:RepoRoot "dist\Aim Trainer Stable"
+$stableExe = Join-Path $stableDir "aim-trainer.exe"
+$stableIcon = Join-Path $stableDir "Aim Trainer.ico"
 
 $wsh = New-Object -ComObject WScript.Shell
-$shortcut = $wsh.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $powershell
-$shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runScript`""
-$shortcut.WorkingDirectory = $Script:RepoRoot
-$shortcut.IconLocation = "$iconPath,0"
-$shortcut.Description = "Build if needed and launch Aim Trainer"
-$shortcut.WindowStyle = 7
-$shortcut.Save()
 
-Write-Host "Installed desktop shortcut: $shortcutPath"
+if ($UpdateStable) {
+    Stop-RunningWindowsApp -Path $stableExe
+    New-Item -ItemType Directory -Force -Path $stableDir | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $stableDir "build") | Out-Null
+    Copy-Item -Force -LiteralPath $Script:ExePath -Destination $stableExe
+    foreach ($dll in @("SDL2.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll")) {
+        Copy-Item -Force -LiteralPath (Join-Path $Script:BuildDir $dll) -Destination (Join-Path $stableDir $dll)
+    }
+    Copy-Item -Force -LiteralPath $iconPath -Destination $stableIcon
+    Write-Host "Updated stable build: $stableDir"
+}
+
+$devShortcut = $wsh.CreateShortcut($devShortcutPath)
+$devShortcut.TargetPath = $powershell
+$devShortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runScript`""
+$devShortcut.WorkingDirectory = $Script:RepoRoot
+$devShortcut.IconLocation = "$iconPath,0"
+$devShortcut.Description = "Build if needed and launch Aim Trainer Dev"
+$devShortcut.WindowStyle = 7
+$devShortcut.Save()
+Write-Host "Installed dev desktop shortcut: $devShortcutPath"
+
+if (Test-Path -LiteralPath $stableExe) {
+    $stableShortcut = $wsh.CreateShortcut($stableShortcutPath)
+    $stableShortcut.TargetPath = $stableExe
+    $stableShortcut.Arguments = ""
+    $stableShortcut.WorkingDirectory = $stableDir
+    $stableShortcut.IconLocation = "$stableIcon,0"
+    $stableShortcut.Description = "Launch the pinned stable Aim Trainer build"
+    $stableShortcut.WindowStyle = 1
+    $stableShortcut.Save()
+    Write-Host "Installed stable desktop shortcut: $stableShortcutPath"
+} else {
+    Write-Host "Stable shortcut skipped. Run with -UpdateStable after verification to create it."
+}

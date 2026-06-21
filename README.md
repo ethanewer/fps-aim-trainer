@@ -9,6 +9,7 @@ In a scenario:
 - Move the mouse to aim. The scenario captures relative mouse input.
 - Left click shoots in clicking scenarios.
 - Hold left click to score in tracking scenarios.
+- Hits play a short, crisp confirmation sound.
 - Esc returns to the menu.
 
 In the menu:
@@ -17,9 +18,11 @@ In the menu:
 - Every setting is a text box. Click a box (or press `TAB`) to focus it, then type the value.
   The first keystroke replaces the shown number; backspace edits it.
 - `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
-- `PRACTICE` starts an endless run; `CHALLENGE` starts a timed 30-second run.
+- `PRACTICE` starts an endless run; `CHALLENGE` starts a timed 60-second run.
   Clicking an already-selected preset in the list also starts a challenge.
-- `SAVE PRESET` / `SAVE GENERAL` persist settings.
+- `NEW` copies the current selected/editor values in that tab.
+- `SAVE PRESET` / `SAVE GENERAL` persist settings. General settings include
+  sensitivity, crosshair, target color, and wall color.
 - Esc on the menu (with nothing being edited) quits.
 
 ## Challenge Mode
@@ -82,11 +85,16 @@ Install the desktop shortcut with:
 .\scripts\windows-install-shortcut.ps1
 ```
 
-The shortcut uses the same launcher, so double-clicking it keeps the playable build current with your latest source changes.
+This installs/refreshes `Aim Trainer Dev`, which uses the same launcher, so double-clicking it keeps the playable build current with your latest source changes. The stable `Aim Trainer` shortcut points at a pinned copy under `dist\Aim Trainer Stable` and is not updated unless you explicitly promote the current build:
+
+```powershell
+.\scripts\windows-install-shortcut.ps1 -UpdateStable
+```
 
 ## Modes And Settings
 
-- Wall clicking: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking. The room is sized to the maximum wall distance.
+- Wall clicking: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking. Distance only changes room depth along the starting view axis; wall width/height stay fixed, so farther targets occupy a smaller angular spawn area.
+- Default clicking presets are ordered as dynamic `1W3T`/`1W3TS`, strafe normal/small/extra-small, then static `1W2T`, `1W4TS`, `1W8TES`, and `1W16T`.
 - 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.

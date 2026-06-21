@@ -195,6 +195,7 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     game.run_mode = mode;
     game.challenge_time_left = mode == RunMode::Challenge ? CHALLENGE_DURATION_SEC : 0.0f;
     game.fire_accumulator = 0.0f;
+    game.pending_hit_sounds = 0;
     game.targets.clear();
     game.stats = {};
     game.yaw = 0.0f;
@@ -452,6 +453,7 @@ void update_playing(Game& game, const Input& input, float dt) {
             game.stats.shots += 1;
             if (hit_index >= 0) {
                 game.stats.hits += 1;
+                game.pending_hit_sounds += 1;
                 game.targets[hit_index] = spawn_wall_target(game, hit_index);
             }
         }
@@ -464,6 +466,7 @@ void update_playing(Game& game, const Input& input, float dt) {
             game.stats.shots += 1;
             if (hit_index >= 0) {
                 game.stats.hits += 1;
+                game.pending_hit_sounds += 1;
             }
         }
     } else if (input.left_down) {

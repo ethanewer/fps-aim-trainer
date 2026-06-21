@@ -19,6 +19,8 @@ inline constexpr float TRACKING_CAPSULE_HEIGHT = 1.35f;
 inline constexpr float PLANE_WALL_HEIGHT = 6.8f;
 inline constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
 inline constexpr float TRACKING_ROOM_SIDE_SCALE = 2.5f;
+inline constexpr float WALL_TARGET_RADIUS_MIN_M = 0.01f;
+inline constexpr float WALL_TARGET_RADIUS_MAX_M = 0.45f;
 // Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
 // a fixed rate so tracking quality becomes a discrete hit count.
 inline constexpr float CHALLENGE_DURATION_SEC = 60.0f;
@@ -64,6 +66,12 @@ enum class FieldId {
     GenLength,
     GenGap,
     GenThick,
+    GenTargetR,
+    GenTargetG,
+    GenTargetB,
+    GenWallR,
+    GenWallG,
+    GenWallB,
 };
 
 inline bool is_tracking(ScenarioKind kind) {
@@ -71,20 +79,20 @@ inline bool is_tracking(ScenarioKind kind) {
 }
 
 struct WallClickSettings {
-    int target_count_min = 5;
-    int target_count_max = 5;
-    float wall_distance_min = 5.71f;
-    float wall_distance_max = 5.71f;
-    float radius_min = 0.09f;
-    float radius_max = 0.09f;
-    float horizontal_speed_min = 1.02f;
-    float horizontal_speed_max = 1.02f;
+    int target_count_min = 3;
+    int target_count_max = 3;
+    float wall_distance_min = 6.0f;
+    float wall_distance_max = 7.5f;
+    float radius_min = 0.08f;
+    float radius_max = 0.08f;
+    float horizontal_speed_min = 1.0f;
+    float horizontal_speed_max = 1.5f;
     float vertical_speed_min = 0.0f;
-    float vertical_speed_max = 0.61f;
-    float acceleration_min = 5.08f;
-    float acceleration_max = 5.08f;
-    float change_min = 0.90f;
-    float change_max = 2.50f;
+    float vertical_speed_max = 0.75f;
+    float acceleration_min = 5.0f;
+    float acceleration_max = 5.0f;
+    float change_min = 0.75f;
+    float change_max = 1.50f;
 };
 
 struct PillTrackingSettings {
@@ -101,6 +109,18 @@ struct CrosshairSettings {
     float length = 9.0f;
     float gap = 4.0f;
     float thickness = 2.0f;
+};
+
+struct TargetColorSettings {
+    int r = 255;
+    int g = 70;
+    int b = 85;
+};
+
+struct WallColorSettings {
+    int r = 94;
+    int g = 101;
+    int b = 109;
 };
 
 struct WallPreset {
@@ -178,6 +198,8 @@ struct Game {
     float pitch = 0.0f;
     float sensitivity = 0.35f;
     CrosshairSettings crosshair;
+    TargetColorSettings target_color;
+    WallColorSettings wall_color;
     WallClickSettings wall_settings;
     PillTrackingSettings pill_settings;
     std::vector<WallPreset> wall_presets;
@@ -186,7 +208,7 @@ struct Game {
     int selected_pill_preset = 0;
     int wall_preset_scroll = 0;
     int pill_preset_scroll = 0;
-    std::string wall_preset_name = "PASU FIVE";
+    std::string wall_preset_name = "1W3T DYNAMIC";
     std::string pill_preset_name = "SMOOTH PILL";
     MenuTab menu_tab = MenuTab::Clicking;
     // Text-box editing state. `active_field` is the focused box (None = idle);
@@ -202,5 +224,6 @@ struct Game {
     std::vector<RunRecord> runs;
     RunRecord last_run;
     bool mouse_grabbed = false;
+    int pending_hit_sounds = 0;
     std::mt19937 rng{std::random_device{}()};
 };

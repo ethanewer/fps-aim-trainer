@@ -84,11 +84,13 @@ float wall_z_from_distance(float meters) {
 }
 
 float wall_width_for_distance(float meters) {
-    return std::max(wall_to_units(2.0f), wall_to_units(meters) * (ROOM_WIDTH / (wall_camera_z() - ROOM_WALL_Z)));
+    (void)meters;
+    return ROOM_WIDTH;
 }
 
 float wall_height_for_distance(float meters) {
-    return std::max(wall_to_units(2.4f), wall_to_units(meters) * (ROOM_HEIGHT / (wall_camera_z() - ROOM_WALL_Z)));
+    (void)meters;
+    return ROOM_HEIGHT;
 }
 
 float wall_back_z_for_distance(float meters) {
@@ -108,7 +110,7 @@ float tracking_room_height(const PillTrackingSettings& settings) {
 
 float scene_far_plane(const Game& game) {
     if (game.scenario.map == MapKind::WallRoom) {
-        float wall_distance = game.wall_settings.wall_distance_max;  // room/far-plane sized to the farthest target
+        float wall_distance = game.wall_settings.wall_distance_max;  // depth/far-plane sized to the farthest target
         float width = wall_width_for_distance(wall_distance);
         float height = wall_height_for_distance(wall_distance);
         float far_z = wall_z_from_distance(wall_distance) - wall_to_units(game.wall_settings.radius_max);

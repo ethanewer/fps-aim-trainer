@@ -53,6 +53,21 @@ function Sync-WindowsRuntimeDlls {
     }
 }
 
+function Stop-RunningWindowsApp([string]$Path = $Script:ExePath) {
+    $resolved = Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue
+    if (-not $resolved) {
+        return
+    }
+    $targetPath = $resolved.Path
+    $running = @(Get-Process -Name "aim-trainer" -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $targetPath })
+    if ($running.Count -eq 0) {
+        return
+    }
+    $ids = @($running | ForEach-Object { $_.Id })
+    Stop-Process -Id $ids -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $ids -Timeout 5 -ErrorAction SilentlyContinue
+}
+
 function Test-WindowsBuildCurrent {
     if (-not (Test-Path -LiteralPath $Script:ExePath)) {
         return $false
@@ -68,6 +83,7 @@ function Test-WindowsBuildCurrent {
 }
 
 function Build-WindowsApp([switch]$Clean) {
+    Stop-RunningWindowsApp
     if ($Clean) {
         Invoke-Msys "make clean"
     }

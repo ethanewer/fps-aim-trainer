@@ -60,6 +60,26 @@ make app        # build and install "~/Desktop/Aim Trainer.app" (macOS bundle, a
 The Makefile globs `src/*.cpp` and tracks header deps (`-MMD -MP`), so adding a new `.cpp` needs no
 Makefile change. Build flags: `-std=c++17 -O3 -Wall -Wextra`.
 
+### Windows desktop launchers
+
+Windows has two desktop shortcuts with intentionally different behavior:
+
+- `Aim Trainer Dev` launches `scripts/windows-run.ps1`. It checks whether `build/aim-trainer.exe`
+  is current, rebuilds when needed, syncs runtime DLLs, and starts the latest dev build.
+- `Aim Trainer` launches the pinned stable copy in `dist/Aim Trainer Stable`. It must stay stable
+  and must not be updated during normal development.
+
+Only update the stable copy when the user explicitly asks for it. To promote the current verified
+build to stable, run:
+
+```powershell
+.\scripts\windows-install-shortcut.ps1 -UpdateStable
+```
+
+Without `-UpdateStable`, the shortcut installer may refresh shortcuts but must preserve the current
+stable executable. After completing work and verifying that it is working and stable, ask the user
+whether they want to promote the current dev build to the stable `Aim Trainer` shortcut.
+
 ## Testing & agent dev tools
 
 There is **no external test framework or CI**. Correctness is gated by an in-binary self-test plus
@@ -149,11 +169,13 @@ focus highlighting.
   `menu.cpp` maps a `FieldId` to its value, kind, limits, and decimals — extend it there when
   adding a setting.
 - **Wall targets have per-target depth.** Wall clicking distance is a min/max range; each target
-  picks its own distance (`Target.distance`) and lives on that depth plane (its own x/y bounds via
-  `wall_target_bounds`). The room/far-plane is sized to `wall_distance_max`.
+  picks its own distance (`Target.distance`) and lives on that depth plane. Distance changes only
+  the room depth along the starting view axis: `wall_width_for_distance` and
+  `wall_height_for_distance` stay fixed, so increasing distance reduces the angular spawn area.
+  The room/far-plane depth is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files. (Current: `version 5`; v4 single wall
+  format. Don't silently break existing `.cfg` files. (Current: `version 7`; v4 single wall
   distance migrates to a min==max range.)
 - **Don't commit build artifacts.** `build/`, `target/`, and `debug-shots/` are gitignored; keep
   them out of commits. The repo tracks only source, `Makefile`, `README.md`, and docs.
@@ -167,3 +189,5 @@ focus highlighting.
 3. New/changed behavior has a self-test assertion.
 4. UI/render changes are screenshot-reviewed (all affected tabs/states).
 5. `README.md` / this file updated if behavior, controls, build, or layout changed.
+6. On Windows, ask whether to promote the verified dev build to stable; do not update stable unless
+   the user says yes.

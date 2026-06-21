@@ -19,6 +19,18 @@ static void color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
     glColor4ub(r, g, b, a);
 }
 
+static uint8_t shade_channel(int value, float scale) {
+    return static_cast<uint8_t>(std::max(0, std::min(255, static_cast<int>(std::round(static_cast<float>(value) * scale)))));
+}
+
+static void room_color(const WallColorSettings& wall_color, float scale) {
+    color(
+        shade_channel(wall_color.r, scale),
+        shade_channel(wall_color.g, scale),
+        shade_channel(wall_color.b, scale)
+    );
+}
+
 static void draw_box(Vec3 c, Vec3 s) {
     float x0 = c.x - s.x * 0.5f, x1 = c.x + s.x * 0.5f;
     float y0 = c.y - s.y * 0.5f, y1 = c.y + s.y * 0.5f;
@@ -112,16 +124,16 @@ static void draw_wall_room(const Game& game) {
     float back_z = wall_back_z_for_distance(wall_distance);
     float width = wall_width_for_distance(wall_distance);
     float height = wall_height_for_distance(wall_distance);
-    color(94, 101, 109);
+    room_color(game.wall_color, 1.00f);
     draw_box({0.0f, height * 0.5f, wall_z}, {width, height, 0.18f});
-    color(82, 89, 97);
+    room_color(game.wall_color, 0.87f);
     draw_box({0.0f, -0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
-    color(78, 85, 93);
+    room_color(game.wall_color, 0.83f);
     draw_box({0.0f, height + 0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
-    color(72, 79, 87);
+    room_color(game.wall_color, 0.77f);
     draw_box({-width * 0.5f, height * 0.5f, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
     draw_box({width * 0.5f, height * 0.5f, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
-    color(64, 70, 78);
+    room_color(game.wall_color, 0.68f);
     draw_box({0.0f, height * 0.5f, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
     draw_box({0.0f, 0.0f, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
     draw_box({-width * 0.5f, height * 0.5f, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
@@ -159,18 +171,21 @@ static void draw_plane360(const Game& game) {
     );
 }
 
-static void set_target_material() {
-    GLfloat ambient[] = {0.72f, 0.14f, 0.18f, 1.0f};
-    GLfloat diffuse[] = {1.0f, 0.28f, 0.38f, 1.0f};
-    GLfloat specular[] = {0.22f, 0.12f, 0.14f, 1.0f};
+static void set_target_material(const TargetColorSettings& target_color) {
+    float r = static_cast<float>(target_color.r) / 255.0f;
+    float g = static_cast<float>(target_color.g) / 255.0f;
+    float b = static_cast<float>(target_color.b) / 255.0f;
+    GLfloat ambient[] = {std::max(0.04f, r * 0.48f), std::max(0.04f, g * 0.48f), std::max(0.04f, b * 0.48f), 1.0f};
+    GLfloat diffuse[] = {r, g, b, 1.0f};
+    GLfloat specular[] = {std::max(0.10f, r * 0.28f), std::max(0.10f, g * 0.28f), std::max(0.10f, b * 0.28f), 1.0f};
     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
     glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular);
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 14.0f);
 }
 
-static void draw_target(const Target& target, ScenarioKind kind) {
-    set_target_material();
+static void draw_target(const Target& target, ScenarioKind kind, const TargetColorSettings& target_color) {
+    set_target_material(target_color);
     if (is_tracking(kind)) {
         draw_lit_cylinder_y(target.pos, target.radius, TRACKING_CAPSULE_HEIGHT);
         draw_lit_sphere(target.pos, target.radius);
@@ -350,7 +365,12 @@ void draw_world(const Game& game, int w, int h) {
     if (game.scenario.map == MapKind::Plane360) {
         glClearColor(76.0f / 255.0f, 83.0f / 255.0f, 92.0f / 255.0f, 1.0f);
     } else {
-        glClearColor(66.0f / 255.0f, 72.0f / 255.0f, 80.0f / 255.0f, 1.0f);
+        glClearColor(
+            static_cast<float>(shade_channel(game.wall_color.r, 0.70f)) / 255.0f,
+            static_cast<float>(shade_channel(game.wall_color.g, 0.70f)) / 255.0f,
+            static_cast<float>(shade_channel(game.wall_color.b, 0.70f)) / 255.0f,
+            1.0f
+        );
     }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     begin_3d(game, w, h);
@@ -366,7 +386,7 @@ void draw_world(const Game& game, int w, int h) {
     glLightfv(GL_LIGHT0, GL_SPECULAR, light_diffuse);
     glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
     for (const Target& target : game.targets) {
-        draw_target(target, game.scenario.kind);
+        draw_target(target, game.scenario.kind, game.target_color);
     }
     glDisable(GL_LIGHTING);
     begin_2d(w, h);

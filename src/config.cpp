@@ -72,7 +72,7 @@ std::string filter_preset_name_draft(const std::string& raw) {
 
 static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
     normalize_float_range(settings.wall_distance_min, settings.wall_distance_max, 2.0f, 30.0f);
-    normalize_float_range(settings.radius_min, settings.radius_max, 0.03f, 0.45f);
+    normalize_float_range(settings.radius_min, settings.radius_max, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M);
     int capacity = wall_capacity_for_radius(settings.radius_max, settings.wall_distance_max);
     normalize_int_range(settings.target_count_min, settings.target_count_max, 1, capacity);
     normalize_float_range(settings.horizontal_speed_min, settings.horizontal_speed_max, 0.0f, 8.0f);
@@ -97,15 +97,137 @@ static void normalize_crosshair(CrosshairSettings& settings) {
     settings.thickness = clampf(settings.thickness, 1.0f, 6.0f);
 }
 
+static void normalize_target_color(TargetColorSettings& settings) {
+    settings.r = std::max(0, std::min(settings.r, 255));
+    settings.g = std::max(0, std::min(settings.g, 255));
+    settings.b = std::max(0, std::min(settings.b, 255));
+}
+
+static void normalize_wall_color(WallColorSettings& settings) {
+    settings.r = std::max(0, std::min(settings.r, 255));
+    settings.g = std::max(0, std::min(settings.g, 255));
+    settings.b = std::max(0, std::min(settings.b, 255));
+}
+
+static WallClickSettings make_wall_settings(
+    int target_count,
+    float radius,
+    float horizontal_speed_min,
+    float horizontal_speed_max,
+    float vertical_speed_min,
+    float vertical_speed_max,
+    float acceleration,
+    float change_min,
+    float change_max
+) {
+    WallClickSettings settings;
+    settings.target_count_min = target_count;
+    settings.target_count_max = target_count;
+    settings.wall_distance_min = 6.0f;
+    settings.wall_distance_max = 7.5f;
+    settings.radius_min = radius;
+    settings.radius_max = radius;
+    settings.horizontal_speed_min = horizontal_speed_min;
+    settings.horizontal_speed_max = horizontal_speed_max;
+    settings.vertical_speed_min = vertical_speed_min;
+    settings.vertical_speed_max = vertical_speed_max;
+    settings.acceleration_min = acceleration;
+    settings.acceleration_max = acceleration;
+    settings.change_min = change_min;
+    settings.change_max = change_max;
+    return settings;
+}
+
+static std::vector<WallPreset> default_wall_presets() {
+    constexpr float normal = 0.08f;
+    constexpr float small = 0.04f;
+    constexpr float extra_small = 0.02f;
+    return {
+        {"1W3T DYNAMIC", make_wall_settings(3, normal, 1.0f, 1.5f, 0.0f, 0.75f, 5.0f, 0.75f, 1.5f)},
+        {"1W3TS DYNAMIC", make_wall_settings(3, small, 1.0f, 1.5f, 0.0f, 0.75f, 5.0f, 0.75f, 1.5f)},
+        {"1W6T STRAFE", make_wall_settings(6, normal, 0.75f, 1.25f, 0.0f, 0.0f, 4.0f, 1.0f, 2.5f)},
+        {"1W6TS STRAFE", make_wall_settings(6, small, 0.75f, 1.25f, 0.0f, 0.0f, 4.0f, 1.0f, 2.5f)},
+        {"1W6TES STRAFE", make_wall_settings(6, extra_small, 0.75f, 1.25f, 0.0f, 0.0f, 4.0f, 1.0f, 2.5f)},
+        {"1W2T STATIC", make_wall_settings(2, normal, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
+        {"1W4TS STATIC", make_wall_settings(4, small, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
+        {"1W8TES STATIC", make_wall_settings(8, extra_small, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
+        {"1W16T STATIC", make_wall_settings(16, normal, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
+    };
+}
+
+static void migrate_builtin_wall_preset(WallPreset& preset) {
+    if (preset.name == "1W4T DYNAMIC") {
+        preset.name = "1W3T DYNAMIC";
+        preset.settings.target_count_min = 3;
+        preset.settings.target_count_max = 3;
+    } else if (preset.name == "1W4TS DYNAMIC") {
+        preset.name = "1W3TS DYNAMIC";
+        preset.settings.target_count_min = 3;
+        preset.settings.target_count_max = 3;
+    }
+}
+
+static int wall_preset_index(const std::vector<WallPreset>& presets, const std::string& name) {
+    for (int i = 0; i < static_cast<int>(presets.size()); ++i) {
+        if (presets[i].name == name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void ensure_wall_presets(Game& game) {
+    std::vector<WallPreset> defaults = default_wall_presets();
+    if (game.wall_presets.empty()) {
+        game.wall_presets = defaults;
+        return;
+    }
+
+    for (WallPreset& preset : game.wall_presets) {
+        migrate_builtin_wall_preset(preset);
+    }
+
+    std::string selected_name;
+    if (game.selected_wall_preset >= 0 && game.selected_wall_preset < static_cast<int>(game.wall_presets.size())) {
+        selected_name = game.wall_presets[game.selected_wall_preset].name;
+    }
+
+    std::vector<WallPreset> ordered;
+    std::vector<bool> used(game.wall_presets.size(), false);
+    for (const WallPreset& preset : defaults) {
+        int existing = wall_preset_index(game.wall_presets, preset.name);
+        if (existing >= 0) {
+            ordered.push_back(game.wall_presets[existing]);
+            used[existing] = true;
+        } else {
+            ordered.push_back(preset);
+        }
+    }
+    for (int i = 0; i < static_cast<int>(game.wall_presets.size()); ++i) {
+        if (!used[i]) {
+            ordered.push_back(game.wall_presets[i]);
+        }
+    }
+    game.wall_presets = ordered;
+    if (!selected_name.empty()) {
+        int selected = wall_preset_index(game.wall_presets, selected_name);
+        if (selected >= 0) {
+            game.selected_wall_preset = selected;
+        }
+    }
+}
+
 void normalize_settings(Game& game) {
     normalize_wall_settings(game, game.wall_settings);
     normalize_pill_settings(game.pill_settings);
     normalize_crosshair(game.crosshair);
+    normalize_target_color(game.target_color);
+    normalize_wall_color(game.wall_color);
     game.sensitivity = clampf(game.sensitivity, 0.001f, 10.0f);
     for (WallPreset& preset : game.wall_presets) {
         preset.name = sanitize_preset_name(preset.name);
         if (preset.name == "MIGRATED CLICK") {
-            preset.name = "PASU FIVE";
+            preset.name = "1W3T DYNAMIC";
         }
         normalize_wall_settings(game, preset.settings);
     }
@@ -119,19 +241,7 @@ void normalize_settings(Game& game) {
 }
 
 void ensure_presets(Game& game) {
-    if (game.wall_presets.empty()) {
-        game.wall_presets.push_back({"PASU FIVE", game.wall_settings});
-        WallClickSettings statics = game.wall_settings;
-        statics.horizontal_speed_min = 0.0f;
-        statics.horizontal_speed_max = 0.0f;
-        statics.vertical_speed_min = 0.0f;
-        statics.vertical_speed_max = 0.0f;
-        statics.acceleration_min = 0.0f;
-        statics.acceleration_max = 0.0f;
-        statics.change_min = 0.0f;
-        statics.change_max = 0.0f;
-        game.wall_presets.push_back({"STATIC FIVE", statics});
-    }
+    ensure_wall_presets(game);
     if (game.pill_presets.empty()) {
         game.pill_presets.push_back({"SMOOTH PILL", game.pill_settings});
         PillTrackingSettings reactive = game.pill_settings;
@@ -204,9 +314,11 @@ void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 5\n";
+    out << "version 7\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
+    out << "target_color " << normalized.target_color.r << " " << normalized.target_color.g << " " << normalized.target_color.b << "\n";
+    out << "wall_color " << normalized.wall_color.r << " " << normalized.wall_color.g << " " << normalized.wall_color.b << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
     out << "selected_pill " << normalized.selected_pill_preset << "\n";
     for (const WallPreset& preset : normalized.wall_presets) {
@@ -262,6 +374,10 @@ void load_settings(Game& game) {
             row >> game.sensitivity;
         } else if (key == "crosshair") {
             row >> game.crosshair.length >> game.crosshair.gap >> game.crosshair.thickness;
+        } else if (key == "target_color") {
+            row >> game.target_color.r >> game.target_color.g >> game.target_color.b;
+        } else if (key == "wall_color") {
+            row >> game.wall_color.r >> game.wall_color.g >> game.wall_color.b;
         } else if (key == "selected_wall") {
             row >> game.selected_wall_preset;
         } else if (key == "selected_pill") {
@@ -394,7 +510,7 @@ void load_settings(Game& game) {
         }
     }
     if (game.wall_presets.empty()) {
-        game.wall_presets.push_back({"PASU FIVE", game.wall_settings});
+        game.wall_presets.push_back({"1W3T DYNAMIC", game.wall_settings});
     }
     if (game.pill_presets.empty()) {
         game.pill_presets.push_back({"SMOOTH PILL", game.pill_settings});

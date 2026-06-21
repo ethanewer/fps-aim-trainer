@@ -30,6 +30,60 @@ int run_self_test() {
     ensure_presets(game);
     apply_selected_presets(game);
 
+    auto find_wall_preset = [](const Game& g, const std::string& name) {
+        for (int i = 0; i < static_cast<int>(g.wall_presets.size()); ++i) {
+            if (g.wall_presets[i].name == name) {
+                return i;
+            }
+        }
+        return -1;
+    };
+
+    const char* default_wall_order[] = {
+        "1W3T DYNAMIC",
+        "1W3TS DYNAMIC",
+        "1W6T STRAFE",
+        "1W6TS STRAFE",
+        "1W6TES STRAFE",
+        "1W2T STATIC",
+        "1W4TS STATIC",
+        "1W8TES STATIC",
+        "1W16T STATIC",
+    };
+    ok = self_test_check(static_cast<int>(game.wall_presets.size()) >= 9, "default wall preset list includes new clicking presets") && ok;
+    for (int i = 0; i < 9 && i < static_cast<int>(game.wall_presets.size()); ++i) {
+        ok = self_test_check(game.wall_presets[i].name == default_wall_order[i], "default wall presets are in sensible order") && ok;
+    }
+    int dynamic_index = find_wall_preset(game, "1W3T DYNAMIC");
+    int dynamic_small_index = find_wall_preset(game, "1W3TS DYNAMIC");
+    int strafe_extra_index = find_wall_preset(game, "1W6TES STRAFE");
+    int static_two_index = find_wall_preset(game, "1W2T STATIC");
+    int static_extra_index = find_wall_preset(game, "1W8TES STATIC");
+    int static_sixteen_index = find_wall_preset(game, "1W16T STATIC");
+    ok = self_test_check(dynamic_index >= 0 && game.wall_presets[dynamic_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[dynamic_index].settings.radius_min - 0.08f) < 0.0001f, "dynamic default uses 1W3T settings") && ok;
+    ok = self_test_check(dynamic_small_index >= 0 && std::fabs(game.wall_presets[dynamic_small_index].settings.radius_min - 0.04f) < 0.0001f, "dynamic small default uses small target size") && ok;
+    ok = self_test_check(strafe_extra_index >= 0 && game.wall_presets[strafe_extra_index].settings.target_count_min == 6 && std::fabs(game.wall_presets[strafe_extra_index].settings.radius_min - 0.02f) < 0.0001f, "strafe extra-small default uses extra-small targets") && ok;
+    ok = self_test_check(static_two_index >= 0 && game.wall_presets[static_two_index].settings.target_count_min == 2 && game.wall_presets[static_two_index].settings.horizontal_speed_max == 0.0f, "static 1W2T default is non-moving") && ok;
+    ok = self_test_check(static_extra_index >= 0 && game.wall_presets[static_extra_index].settings.target_count_min == 8 && std::fabs(game.wall_presets[static_extra_index].settings.radius_min - 0.02f) < 0.0001f && game.wall_presets[static_extra_index].settings.horizontal_speed_max == 0.0f, "static 1W8TES default is non-moving extra-small") && ok;
+    ok = self_test_check(static_sixteen_index >= 0 && game.wall_presets[static_sixteen_index].settings.target_count_min == 16 && std::fabs(game.wall_presets[static_sixteen_index].settings.radius_min - 0.08f) < 0.0001f && game.wall_presets[static_sixteen_index].settings.horizontal_speed_max == 0.0f, "static 1W16T default is non-moving") && ok;
+
+    Game preset_order;
+    preset_order.wall_presets = {
+        {"CUSTOM", WallClickSettings{}},
+        {"1W6T STRAFE", WallClickSettings{}},
+        {"1W4T DYNAMIC", WallClickSettings{}},
+    };
+    preset_order.selected_wall_preset = 2;
+    preset_order.wall_presets[1].settings.radius_min = 0.12f;
+    preset_order.wall_presets[1].settings.radius_max = 0.12f;
+    preset_order.wall_presets[2].settings.radius_min = 0.13f;
+    preset_order.wall_presets[2].settings.radius_max = 0.13f;
+    ensure_presets(preset_order);
+    ok = self_test_check(preset_order.wall_presets[0].name == "1W3T DYNAMIC" && preset_order.wall_presets[1].name == "1W3TS DYNAMIC" && preset_order.wall_presets[2].name == "1W6T STRAFE", "existing built-in wall presets are reordered with defaults") && ok;
+    ok = self_test_check(preset_order.wall_presets.back().name == "CUSTOM", "custom wall presets remain after built-in defaults") && ok;
+    ok = self_test_check(std::fabs(preset_order.wall_presets[2].settings.radius_min - 0.12f) < 0.0001f, "reordering preserves existing strafe preset settings") && ok;
+    ok = self_test_check(preset_order.wall_presets[preset_order.selected_wall_preset].name == "1W3T DYNAMIC" && preset_order.wall_presets[preset_order.selected_wall_preset].settings.target_count_min == 3 && std::fabs(preset_order.wall_presets[preset_order.selected_wall_preset].settings.radius_min - 0.13f) < 0.0001f, "reordering migrates and preserves selected built-in preset settings") && ok;
+
     // Name field editing through the draft-based text-box model.
     menu_focus_field(game, FieldId::WallName);
     ok = self_test_check(game.active_field == FieldId::WallName, "clicking a name box focuses it") && ok;
@@ -103,6 +157,37 @@ int run_self_test() {
     ok = self_test_check(game.active_field == FieldId::WallName, "shift+tab moves to the previous field") && ok;
     menu_blur_field(game);
 
+    game.wall_settings.radius_min = 0.09f;
+    game.wall_settings.radius_max = 0.20f;
+    menu_focus_field(game, FieldId::WallRadiusMin);
+    Input tiny_radius;
+    tiny_radius.text_input = "0.01";
+    menu_handle_edit(game, tiny_radius);
+    menu_blur_field(game);
+    normalize_settings(game);
+    ok = self_test_check(std::fabs(game.wall_settings.radius_min - 0.01f) < 0.0001f, "wall target radius accepts 0.01m minimum") && ok;
+    game.wall_settings.radius_min = 0.001f;
+    normalize_settings(game);
+    ok = self_test_check(std::fabs(game.wall_settings.radius_min - 0.01f) < 0.0001f, "wall target radius clamps below 0.01m") && ok;
+
+    game.menu_tab = MenuTab::General;
+    menu_focus_field(game, FieldId::GenThick);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenTargetR, "general tab navigation reaches target color red") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenTargetG, "general tab navigation reaches target color green") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenTargetB, "general tab navigation reaches target color blue") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenWallR, "general tab navigation reaches wall color red") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenWallG, "general tab navigation reaches wall color green") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenWallB, "general tab navigation reaches wall color blue") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenSens, "general tab navigation wraps after wall color") && ok;
+    menu_blur_field(game);
+
     game.selected_wall_preset = 0;
     game.wall_presets[0].settings.radius_min = 0.34f;
     game.wall_presets[0].settings.radius_max = 0.34f;
@@ -118,6 +203,16 @@ int run_self_test() {
     ok = self_test_check(std::fabs(game.wall_presets[game.selected_wall_preset].settings.radius_max - 0.28f) < 0.0001f, "new wall preset copies current edited max settings") && ok;
     ok = self_test_check(game.active_field == FieldId::None, "new wall preset exits text edit mode") && ok;
 
+    game.wall_presets = {{"SELECTED", WallClickSettings{}}, {"BOTTOM", WallClickSettings{}}};
+    game.selected_wall_preset = 0;
+    game.wall_presets[0].settings.radius_min = 0.11f;
+    game.wall_presets[0].settings.radius_max = 0.12f;
+    game.wall_presets[1].settings.radius_min = 0.31f;
+    game.wall_presets[1].settings.radius_max = 0.32f;
+    game.wall_settings = game.wall_presets[0].settings;
+    new_wall_preset(game);
+    ok = self_test_check(std::fabs(game.wall_settings.radius_min - 0.11f) < 0.0001f && std::fabs(game.wall_settings.radius_max - 0.12f) < 0.0001f, "new wall preset copies selected settings instead of bottom row") && ok;
+
     game.wall_presets.push_back({"CLICK PRESET 4", game.wall_settings});
     std::string unique_click = unique_preset_name(game.wall_presets, "CLICK PRESET 4", -1);
     ok = self_test_check(unique_click != "CLICK PRESET 4", "generated wall preset names avoid duplicates") && ok;
@@ -126,7 +221,7 @@ int run_self_test() {
     game.selected_wall_preset = 0;
     game.active_field = FieldId::WallName;
     delete_wall_preset(game);
-    ok = self_test_check(game.wall_presets.size() == 1 && game.wall_presets[0].name == "PASU FIVE", "deleting the last wall preset restores default") && ok;
+    ok = self_test_check(!game.wall_presets.empty() && game.wall_presets[0].name == "1W3T DYNAMIC" && find_wall_preset(game, "1W8TES STATIC") >= 0, "deleting the last wall preset restores default wall presets") && ok;
     ok = self_test_check(game.active_field == FieldId::None, "delete wall preset exits text edit mode") && ok;
 
     game.pill_preset_name.clear();
@@ -139,6 +234,16 @@ int run_self_test() {
     new_pill_preset(game);
     ok = self_test_check(static_cast<int>(game.pill_presets.size()) == old_pill_count + 1, "new pill preset appends exactly one preset") && ok;
     ok = self_test_check(game.active_field == FieldId::None, "new pill preset exits text edit mode") && ok;
+
+    game.pill_presets = {{"SELECTED PILL", PillTrackingSettings{}}, {"BOTTOM PILL", PillTrackingSettings{}}};
+    game.selected_pill_preset = 0;
+    game.pill_presets[0].settings.width = 0.55f;
+    game.pill_presets[0].settings.speed = 0.75f;
+    game.pill_presets[1].settings.width = 1.75f;
+    game.pill_presets[1].settings.speed = 2.25f;
+    game.pill_settings = game.pill_presets[0].settings;
+    new_pill_preset(game);
+    ok = self_test_check(std::fabs(game.pill_settings.width - 0.55f) < 0.0001f && std::fabs(game.pill_settings.speed - 0.75f) < 0.0001f, "new pill preset copies selected settings instead of bottom row") && ok;
 
     // Creating a preset must scroll it into the 7-row visible window.
     {
@@ -154,7 +259,7 @@ int run_self_test() {
 
     g_settings_path_override = "build/self-test-settings.cfg";
     std::remove(g_settings_path_override.c_str());
-    game.wall_presets = {{"PASU FIVE", WallClickSettings{}}, {"STATIC FIVE", WallClickSettings{}}};
+    game.wall_presets = {{"1W3T DYNAMIC", WallClickSettings{}}, {"1W6T STRAFE", WallClickSettings{}}};
     game.pill_presets = {{"SMOOTH PILL", PillTrackingSettings{}}, {"REACTIVE PILL", PillTrackingSettings{}}};
     game.selected_wall_preset = 0;
     game.selected_pill_preset = 0;
@@ -168,12 +273,16 @@ int run_self_test() {
     save_current_wall_preset(game);
     game.sensitivity = 0.777f;
     game.crosshair = {14.0f, 6.0f, 3.0f};
+    game.target_color = {32, 210, 244};
+    game.wall_color = {44, 55, 66};
     save_settings(game);
 
     Game loaded;
     load_settings(loaded);
     ok = self_test_check(std::fabs(loaded.sensitivity - 0.777f) < 0.0001f, "saved general sensitivity loads") && ok;
     ok = self_test_check(std::fabs(loaded.crosshair.length - 14.0f) < 0.0001f, "saved crosshair loads") && ok;
+    ok = self_test_check(loaded.target_color.r == 32 && loaded.target_color.g == 210 && loaded.target_color.b == 244, "saved target color loads") && ok;
+    ok = self_test_check(loaded.wall_color.r == 44 && loaded.wall_color.g == 55 && loaded.wall_color.b == 66, "saved wall color loads") && ok;
     ok = self_test_check(!loaded.wall_presets.empty(), "saved wall presets load") && ok;
     ok = self_test_check(loaded.wall_preset_name == "TINY PASU", "selected named wall preset loads into editor") && ok;
     ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count range loads") && ok;
@@ -190,6 +299,13 @@ int run_self_test() {
     load_settings(general_only_loaded);
     ok = self_test_check(std::fabs(general_only_loaded.sensitivity - 0.555f) < 0.0001f, "general save persists sensitivity") && ok;
     ok = self_test_check(std::fabs(general_only_loaded.wall_settings.radius_min - selected_radius) < 0.0001f, "general save does not silently overwrite selected wall preset") && ok;
+
+    Game color_clamp;
+    color_clamp.target_color = {-10, 128, 300};
+    color_clamp.wall_color = {999, -20, 64};
+    normalize_settings(color_clamp);
+    ok = self_test_check(color_clamp.target_color.r == 0 && color_clamp.target_color.g == 128 && color_clamp.target_color.b == 255, "target color channels clamp to RGB byte range") && ok;
+    ok = self_test_check(color_clamp.wall_color.r == 255 && color_clamp.wall_color.g == 0 && color_clamp.wall_color.b == 64, "wall color channels clamp to RGB byte range") && ok;
 
     {
         std::ofstream old("build/self-test-settings.cfg");
@@ -233,8 +349,8 @@ int run_self_test() {
     }
     Game actual_v2_loaded;
     load_settings(actual_v2_loaded);
-    ok = self_test_check(actual_v2_loaded.wall_preset_name == "1W4T DYNAMIC", "actual v2 selected wall preset remains selected") && ok;
-    ok = self_test_check(actual_v2_loaded.wall_settings.target_count_min == 4 && actual_v2_loaded.wall_settings.target_count_max == 4, "actual v2 wall target count is preserved") && ok;
+    ok = self_test_check(actual_v2_loaded.wall_preset_name == "1W3T DYNAMIC", "actual v2 selected wall preset migrates to 1W3T") && ok;
+    ok = self_test_check(actual_v2_loaded.wall_settings.target_count_min == 3 && actual_v2_loaded.wall_settings.target_count_max == 3, "actual v2 dynamic wall target count migrates to 1W3T") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.radius_min) - 0.24f) < 0.001f, "actual v2 wall radius preserves old internal size") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 wall horizontal speed preserves old internal speed") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.vertical_speed_min) - 2.0f) < 0.001f, "actual v2 wall vertical speed preserves old internal speed") && ok;
@@ -248,7 +364,7 @@ int run_self_test() {
     save_settings(actual_v2_loaded);
     Game actual_v2_roundtrip;
     load_settings(actual_v2_roundtrip);
-    ok = self_test_check(actual_v2_roundtrip.wall_preset_name == "1W4T DYNAMIC" && actual_v2_roundtrip.pill_preset_name == "SMOOTH PILL", "actual v2 save round trip preserves selected presets") && ok;
+    ok = self_test_check(actual_v2_roundtrip.wall_preset_name == "1W3T DYNAMIC" && actual_v2_roundtrip.pill_preset_name == "SMOOTH PILL", "actual v2 save round trip preserves selected presets") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_roundtrip.wall_settings.radius_min) - 0.24f) < 0.001f && std::fabs(wall_to_units(actual_v2_roundtrip.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 save round trip preserves wall behavior") && ok;
     ok = self_test_check(std::fabs(tracking_to_units(actual_v2_roundtrip.pill_settings.width) - 1.24f) < 0.001f && std::fabs(tracking_to_units(actual_v2_roundtrip.pill_settings.speed) - 4.0f) < 0.001f, "actual v2 save round trip preserves pill behavior") && ok;
 
@@ -428,6 +544,14 @@ int run_self_test() {
     distance_test.wall_settings.wall_distance_max = 8.0f;
     float far_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance_max);
     ok = self_test_check(far_wall_z < near_wall_z && std::fabs((near_wall_z - far_wall_z) - wall_to_units(4.0f)) < 0.001f, "wall distance moves wall by configured meters") && ok;
+    float near_wall_width = wall_width_for_distance(4.0f);
+    float far_wall_width = wall_width_for_distance(12.0f);
+    float near_wall_height = wall_height_for_distance(4.0f);
+    float far_wall_height = wall_height_for_distance(12.0f);
+    ok = self_test_check(std::fabs(near_wall_width - far_wall_width) < 0.001f && std::fabs(near_wall_height - far_wall_height) < 0.001f, "wall distance keeps wall width and height fixed") && ok;
+    float near_spawn_angle = std::atan((near_wall_width * 0.44f) / wall_to_units(4.0f));
+    float far_spawn_angle = std::atan((far_wall_width * 0.44f) / wall_to_units(12.0f));
+    ok = self_test_check(far_spawn_angle < near_spawn_angle, "farther wall distance reduces angular spawn area") && ok;
 
     Game wall_far_plane_test;
     init_scenarios(wall_far_plane_test);
@@ -587,6 +711,35 @@ int run_self_test() {
     normalize_settings(wall_flat);
     Target flat_target = spawn_wall_target(wall_flat);
     ok = self_test_check(std::fabs(flat_target.distance - 7.0f) < 0.001f, "equal min and max distance spawns all targets on one plane") && ok;
+
+    Game hit_sound_test;
+    init_scenarios(hit_sound_test);
+    hit_sound_test.wall_settings.target_count_min = 1;
+    hit_sound_test.wall_settings.target_count_max = 1;
+    hit_sound_test.wall_settings.radius_min = 0.4f;
+    hit_sound_test.wall_settings.radius_max = 0.4f;
+    hit_sound_test.wall_settings.horizontal_speed_min = 0.0f;
+    hit_sound_test.wall_settings.horizontal_speed_max = 0.0f;
+    hit_sound_test.wall_settings.vertical_speed_min = 0.0f;
+    hit_sound_test.wall_settings.vertical_speed_max = 0.0f;
+    hit_sound_test.wall_settings.acceleration_min = 0.0f;
+    hit_sound_test.wall_settings.acceleration_max = 0.0f;
+    normalize_settings(hit_sound_test);
+    start_scenario(hit_sound_test, hit_sound_test.scenarios[0], RunMode::Practice);
+    float hit_distance = hit_sound_test.wall_settings.wall_distance_max;
+    hit_sound_test.targets = {{
+        {0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(hit_distance) + 0.45f},
+        {0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f},
+        1000.0f,
+        wall_to_units(hit_sound_test.wall_settings.radius_min),
+        0.0f,
+        hit_distance,
+    }};
+    Input hit_click;
+    hit_click.left_pressed = true;
+    update_playing(hit_sound_test, hit_click, 1.0f / 120.0f);
+    ok = self_test_check(hit_sound_test.stats.hits == 1 && hit_sound_test.pending_hit_sounds == 1, "wall hit queues one hit sound event") && ok;
 
     // Challenge mode + run persistence.
     {
