@@ -144,6 +144,7 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
 
     Game game;
     load_settings(game);
+    load_runs(game);
     init_scenarios(game);
     if (tab_index == 1) game.menu_tab = MenuTab::Tracking;
     else if (tab_index == 2) game.menu_tab = MenuTab::General;
@@ -209,6 +210,51 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
     return ok;
 }
 
+static bool render_debug_results(const std::string& path, int width, int height, int scenario_index) {
+    SDL_Window* window = create_gl_window("Aim Trainer Debug Results", width, height, false);
+    if (!window) {
+        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        return false;
+    }
+    SDL_GLContext gl = SDL_GL_CreateContext(window);
+    if (!gl) {
+        std::fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(window);
+        return false;
+    }
+    SDL_GL_SetSwapInterval(0);
+
+    Game game;
+    init_scenarios(game);
+    ScenarioKind kind = scenario_index == 1 ? ScenarioKind::PillTracking : ScenarioKind::WallClick;
+    RunRecord previous;
+    previous.kind = kind;
+    previous.preset_name = "PASU FIVE";
+    previous.score = 38;
+    previous.shots = 52;
+    previous.accuracy = 73.1f;
+    previous.duration = CHALLENGE_DURATION_SEC;
+    previous.timestamp = 1700000000LL;
+    RunRecord run = previous;
+    run.score = 47;
+    run.shots = 60;
+    run.accuracy = 78.3f;
+    run.timestamp = 1700000123LL;
+    game.runs.push_back(previous);
+    game.runs.push_back(run);
+    game.last_run = run;
+    game.mode = AppMode::Results;
+
+    int drawable_w = 0, drawable_h = 0;
+    SDL_GL_GetDrawableSize(window, &drawable_w, &drawable_h);
+    draw_results(game, drawable_w, drawable_h);
+    bool ok = save_bmp_screenshot(path, drawable_w, drawable_h);
+    SDL_GL_SwapWindow(window);
+    SDL_GL_DeleteContext(gl);
+    SDL_DestroyWindow(window);
+    return ok;
+}
+
 static int run_debug_mode(int argc, char** argv) {
     int width = 1280;
     int height = 720;
@@ -240,6 +286,18 @@ static int run_debug_mode(int argc, char** argv) {
         int tab = argc >= 6 ? std::atoi(argv[5]) : 0;
         int state = argc >= 7 ? std::atoi(argv[6]) : 0;
         return render_debug_menu(argv[2], width, height, tab, state) ? 0 : 1;
+    }
+    if (std::string(argv[1]) == "--debug-results") {
+        if (argc < 3) {
+            std::fprintf(stderr, "Usage: %s --debug-results <out.bmp> [width height scenario]\n", argv[0]);
+            return 2;
+        }
+        if (argc >= 5) {
+            width = std::max(320, std::atoi(argv[3]));
+            height = std::max(180, std::atoi(argv[4]));
+        }
+        int scenario = argc >= 6 ? std::atoi(argv[5]) : 0;
+        return render_debug_results(argv[2], width, height, scenario) ? 0 : 1;
     }
     if (std::string(argv[1]) == "--debug-all") {
         if (argc < 3) {
@@ -283,7 +341,7 @@ int main(int argc, char** argv) {
         return rc;
     }
 
-    if (argc > 1 && (std::string(argv[1]) == "--debug-shot" || std::string(argv[1]) == "--debug-all" || std::string(argv[1]) == "--debug-menu")) {
+    if (argc > 1 && (std::string(argv[1]) == "--debug-shot" || std::string(argv[1]) == "--debug-all" || std::string(argv[1]) == "--debug-menu" || std::string(argv[1]) == "--debug-results")) {
         int rc = run_debug_mode(argc, argv);
         SDL_Quit();
         return rc;
@@ -309,6 +367,7 @@ int main(int argc, char** argv) {
 
     Game game;
     load_settings(game);
+    load_runs(game);
     init_scenarios(game);
 
     uint64_t last = SDL_GetPerformanceCounter();
@@ -347,7 +406,8 @@ int main(int argc, char** argv) {
             running = false;
         }
         if (input.escape_pressed) {
-            if (game.mode == AppMode::Playing) game.mode = AppMode::Menu;
+            if (game.mode == AppMode::Playing) game.mode = AppMode::Menu;  // abort run, no record
+            else if (game.mode == AppMode::Results) game.mode = AppMode::Menu;
             else if (game.active_field != FieldId::None) menu_cancel_edit(game);
             else running = false;
         }
@@ -368,7 +428,17 @@ int main(int argc, char** argv) {
         if (game.mode == AppMode::Playing) {
             set_mouse_grab(game, true);
             update_playing(game, input, dt);
-            draw_world(game, drawable_w, drawable_h);
+            if (game.mode == AppMode::Playing) {
+                draw_world(game, drawable_w, drawable_h);
+            } else {
+                draw_results(game, drawable_w, drawable_h);  // challenge just finished
+            }
+        } else if (game.mode == AppMode::Results) {
+            set_mouse_grab(game, false);
+            if (input.left_pressed) {
+                game.mode = AppMode::Menu;
+            }
+            draw_results(game, drawable_w, drawable_h);
         } else {
             set_mouse_grab(game, false);
             draw_menu(game, input, drawable_w, drawable_h);

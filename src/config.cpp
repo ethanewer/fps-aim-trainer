@@ -13,6 +13,7 @@
 #include "world.hpp"
 
 std::string g_settings_path_override;
+std::string g_runs_path_override;
 
 static void normalize_float_range(float& low, float& high, float min_allowed, float max_allowed) {
     low = clampf(low, min_allowed, max_allowed);
@@ -379,4 +380,76 @@ void load_settings(Game& game) {
         game.pill_presets.push_back({"SMOOTH PILL", game.pill_settings});
     }
     apply_selected_presets(game);
+}
+
+std::string runs_path() {
+    if (!g_runs_path_override.empty()) {
+        return g_runs_path_override;
+    }
+#ifdef _WIN32
+    const char* base = std::getenv("APPDATA");
+    if (base) {
+        return std::string(base) + "\\aim_trainer_runs.cfg";
+    }
+    return "aim_trainer_runs.cfg";
+#else
+    const char* home = std::getenv("HOME");
+    if (home) {
+        return std::string(home) + "/.aim_trainer_runs.cfg";
+    }
+    return ".aim_trainer_runs.cfg";
+#endif
+}
+
+void save_runs(const Game& game) {
+    std::ofstream out(runs_path());
+    if (!out) {
+        return;
+    }
+    out << "version 1\n";
+    for (const RunRecord& run : game.runs) {
+        out << "run " << static_cast<int>(run.kind) << " "
+            << run.score << " "
+            << run.shots << " "
+            << run.accuracy << " "
+            << run.duration << " "
+            << run.timestamp << " "
+            << std::quoted(run.preset_name) << "\n";
+    }
+}
+
+void load_runs(Game& game) {
+    game.runs.clear();
+    std::ifstream in(runs_path());
+    if (!in) {
+        return;
+    }
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        std::istringstream row(line);
+        std::string key;
+        row >> key;
+        if (key != "run") {
+            continue;
+        }
+        int kind = 0;
+        RunRecord run;
+        if (row >> kind >> run.score >> run.shots >> run.accuracy >> run.duration >> run.timestamp >> std::quoted(run.preset_name)) {
+            run.kind = kind == static_cast<int>(ScenarioKind::PillTracking) ? ScenarioKind::PillTracking : ScenarioKind::WallClick;
+            game.runs.push_back(run);
+        }
+    }
+}
+
+int best_run_score(const Game& game, ScenarioKind kind, const std::string& preset_name) {
+    int best = -1;
+    for (const RunRecord& run : game.runs) {
+        if (run.kind == kind && run.preset_name == preset_name) {
+            best = std::max(best, run.score);
+        }
+    }
+    return best;
 }

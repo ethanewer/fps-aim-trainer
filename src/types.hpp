@@ -19,11 +19,16 @@ inline constexpr float TRACKING_CAPSULE_HEIGHT = 1.35f;
 inline constexpr float PLANE_WALL_HEIGHT = 6.8f;
 inline constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
 inline constexpr float TRACKING_ROOM_SIDE_SCALE = 2.5f;
+// Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
+// a fixed rate so tracking quality becomes a discrete hit count.
+inline constexpr float CHALLENGE_DURATION_SEC = 30.0f;
+inline constexpr float TRACKING_FIRE_HZ = 20.0f;
 
-enum class AppMode { Menu, Playing };
+enum class AppMode { Menu, Playing, Results };
 enum class ScenarioKind { WallClick, PillTracking };
 enum class MapKind { WallRoom, Plane360 };
 enum class MenuTab { Clicking, Tracking, General };
+enum class RunMode { Practice, Challenge };
 
 // Every editable text box in the menu has a stable id. `None` means nothing is
 // being edited. The order within each tab is also the TAB-key navigation order.
@@ -132,6 +137,17 @@ struct Stats {
     float elapsed = 0.0f;
 };
 
+// One completed challenge run, persisted to the local runs file.
+struct RunRecord {
+    ScenarioKind kind = ScenarioKind::WallClick;
+    std::string preset_name;
+    int score = 0;          // hits (the score; accuracy is tracked but not scored)
+    int shots = 0;
+    float accuracy = 0.0f;  // hits / shots * 100
+    float duration = 0.0f;  // seconds
+    long long timestamp = 0;  // unix epoch seconds when the run finished
+};
+
 struct Input {
     int mouse_x = 0;
     int mouse_y = 0;
@@ -176,6 +192,12 @@ struct Game {
     FieldId active_field = FieldId::None;
     std::string edit_draft;
     bool edit_fresh = false;
+    // Challenge mode state and the locally-saved run history.
+    RunMode run_mode = RunMode::Practice;
+    float challenge_time_left = 0.0f;
+    float fire_accumulator = 0.0f;  // drives the tracking auto-fire rate
+    std::vector<RunRecord> runs;
+    RunRecord last_run;
     bool mouse_grabbed = false;
     std::mt19937 rng{std::random_device{}()};
 };

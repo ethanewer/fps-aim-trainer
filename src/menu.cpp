@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <string>
 
 #include "config.hpp"
@@ -487,13 +488,18 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x, bool tracking
         }
         if (clicked) {
             menu_blur_field(g);
-            selected = index;
-            if (tracking) {
-                g.pill_settings = g.pill_presets[index].settings;
-                g.pill_preset_name = g.pill_presets[index].name;
+            if (is_selected) {
+                // Clicking the already-selected scenario starts a challenge run.
+                start_scenario(g, g.scenarios[tracking ? 1 : 0], RunMode::Challenge);
             } else {
-                g.wall_settings = g.wall_presets[index].settings;
-                g.wall_preset_name = g.wall_presets[index].name;
+                selected = index;
+                if (tracking) {
+                    g.pill_settings = g.pill_presets[index].settings;
+                    g.pill_preset_name = g.pill_presets[index].name;
+                } else {
+                    g.wall_settings = g.wall_presets[index].settings;
+                    g.wall_preset_name = g.wall_presets[index].name;
+                }
             }
         }
     }
@@ -517,22 +523,39 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x, bool tracking
     }
 }
 
-// Shared editor card chrome: title, NAME box, START button. Returns the card x.
-static void draw_editor_header(Game& g, const Input& in, float x, const std::string& title, FieldId name_id, int scenario_index) {
+// Shared editor card chrome: title, BEST readout, NAME box, PRACTICE/CHALLENGE.
+static void draw_editor_header(Game& g, const Input& in, float x, const std::string& title, FieldId name_id, ScenarioKind kind, int scenario_index) {
     draw_card(x, CARD_Y, EDITOR_W, CARD_H);
     float cl = x + 16.0f;
     text(cl, CARD_Y + 12.0f, title, 2.8f, 230, 236, 244);
 
+    // Best challenge score for the selected preset, right-aligned on the title row.
+    const std::string& preset = kind == ScenarioKind::WallClick ? g.wall_preset_name : g.pill_preset_name;
+    int best = best_run_score(g, kind, preset);
+    if (best >= 0) {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "BEST %d", best);
+        std::string best_text = buf;
+        text(x + EDITOR_W - 16.0f - text_width(best_text, 2.0f), CARD_Y + 16.0f, best_text, 2.0f, 255, 200, 90);
+    }
+
     float row_y = CARD_Y + 46.0f;
     field_label(cl, row_y + 11.0f, "NAME");
     float name_box_x = cl + 78.0f;
-    float name_box_w = 300.0f;
+    float name_box_w = 248.0f;
     value_box(g, in, name_id, name_box_x, row_y, name_box_w, 36.0f);
-    float start_x = name_box_x + name_box_w + 18.0f;
-    float start_w = (x + EDITOR_W - 16.0f) - start_x;
-    if (primary_button(in, start_x, row_y, start_w, 36.0f, "START", 2.6f)) {
+
+    float buttons_x = name_box_x + name_box_w + 16.0f;
+    float buttons_right = x + EDITOR_W - 16.0f;
+    float gap = 10.0f;
+    float bw = (buttons_right - buttons_x - gap) * 0.5f;
+    if (secondary_button(in, buttons_x, row_y, bw, 36.0f, "PRACTICE", 2.0f)) {
         menu_blur_field(g);
-        start_scenario(g, g.scenarios[scenario_index]);
+        start_scenario(g, g.scenarios[scenario_index], RunMode::Practice);
+    }
+    if (primary_button(in, buttons_x + bw + gap, row_y, bw, 36.0f, "CHALLENGE", 2.0f)) {
+        menu_blur_field(g);
+        start_scenario(g, g.scenarios[scenario_index], RunMode::Challenge);
     }
     divider(cl, CARD_Y + 94.0f, EDITOR_W - 32.0f);
 }
@@ -557,7 +580,7 @@ static void draw_clicking_tab(Game& g, const Input& in, float left) {
     draw_preset_sidebar(g, in, left, false);
 
     float x = left + EDITOR_DX;
-    draw_editor_header(g, in, x, "WALL CLICKING", FieldId::WallName, 0);
+    draw_editor_header(g, in, x, "WALL CLICKING", FieldId::WallName, ScenarioKind::WallClick, 0);
 
     float cl = x + 16.0f;
     float min_x = cl + 272.0f;
@@ -583,7 +606,7 @@ static void draw_tracking_tab(Game& g, const Input& in, float left) {
     draw_preset_sidebar(g, in, left, true);
 
     float x = left + EDITOR_DX;
-    draw_editor_header(g, in, x, "PILL TRACKING", FieldId::PillName, 1);
+    draw_editor_header(g, in, x, "PILL TRACKING", FieldId::PillName, ScenarioKind::PillTracking, 1);
 
     float cl = x + 16.0f;
     float min_x = cl + 272.0f;
@@ -684,4 +707,71 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
     }
 
     glPopMatrix();
+}
+
+// ---------------------------------------------------------------------------
+// Challenge results screen.
+// ---------------------------------------------------------------------------
+
+void draw_results(const Game& game, int w, int h) {
+    glClearColor(16.0f / 255.0f, 18.0f / 255.0f, 22.0f / 255.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    begin_2d(w, h);
+    float ui_scale = ui_scale_for_height(h);
+    float ui_w = static_cast<float>(w) / ui_scale;
+    float ui_h = static_cast<float>(h) / ui_scale;
+    float cx = ui_w * 0.5f;
+
+    const RunRecord& run = game.last_run;
+    int prev_best = -1;  // best for this scenario/preset before this run
+    for (size_t i = 0; i + 1 < game.runs.size(); ++i) {
+        const RunRecord& other = game.runs[i];
+        if (other.kind == run.kind && other.preset_name == run.preset_name) {
+            prev_best = std::max(prev_best, other.score);
+        }
+    }
+    bool new_best = prev_best < 0 || run.score > prev_best;
+    int best = std::max(prev_best, run.score);
+    const char* scenario_title = run.kind == ScenarioKind::WallClick ? "WALL CLICKING" : "360 PILL TRACKING";
+
+    float card_w = 560.0f;
+    float card_h = 430.0f;
+    float card_x = cx - card_w * 0.5f;
+    float card_y = ui_h * 0.5f - card_h * 0.5f;
+    draw_card(card_x, card_y, card_w, card_h);
+
+    auto centered = [&](float y, const std::string& s, float scale, uint8_t cr, uint8_t cg, uint8_t cb) {
+        text(cx - text_width(s, scale) * 0.5f, y, s, scale, cr, cg, cb);
+    };
+
+    char buf[64];
+    float y = card_y + 30.0f;
+    centered(y, "CHALLENGE COMPLETE", 3.0f, 255, 70, 85); y += 50.0f;
+    centered(y, scenario_title, 2.0f, 230, 236, 244); y += 30.0f;
+    centered(y, run.preset_name, 2.0f, 150, 162, 178); y += 56.0f;
+
+    centered(y, "SCORE", 2.0f, 150, 162, 178); y += 30.0f;
+    std::snprintf(buf, sizeof(buf), "%d", run.score);
+    centered(y, buf, 6.0f, 245, 248, 252); y += 78.0f;
+
+    std::snprintf(buf, sizeof(buf), "ACCURACY %.1f%%   SHOTS %d", run.accuracy, run.shots);
+    centered(y, buf, 2.0f, 210, 220, 232); y += 34.0f;
+
+    if (new_best) {
+        centered(y, "NEW BEST", 2.4f, 255, 200, 90);
+    } else {
+        std::snprintf(buf, sizeof(buf), "BEST %d", best);
+        centered(y, buf, 2.0f, 150, 162, 178);
+    }
+    y += 40.0f;
+
+    char datebuf[40] = "";
+    std::time_t t = static_cast<std::time_t>(run.timestamp);
+    std::tm* local = std::localtime(&t);
+    if (local) {
+        std::strftime(datebuf, sizeof(datebuf), "%Y-%m-%d %H:%M", local);
+        centered(y, datebuf, 1.7f, 120, 130, 145);
+    }
+
+    centered(card_y + card_h - 28.0f, "CLICK OR ESC TO CONTINUE", 1.8f, 150, 162, 178);
 }

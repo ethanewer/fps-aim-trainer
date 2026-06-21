@@ -538,6 +538,54 @@ int run_self_test() {
     }
     ok = self_test_check(saw_count_3 && saw_count_4 && saw_count_5, "wall target count samples all integer values in range") && ok;
 
+    // Challenge mode + run persistence.
+    {
+        g_runs_path_override = "build/self-test-runs.cfg";
+        std::remove(g_runs_path_override.c_str());
+
+        Game ch;
+        ch.rng.seed(99);
+        init_scenarios(ch);
+        ch.pill_preset_name = "TEST PILL";
+        start_scenario(ch, ch.scenarios[1], RunMode::Challenge);
+        ok = self_test_check(ch.run_mode == RunMode::Challenge && std::fabs(ch.challenge_time_left - CHALLENGE_DURATION_SEC) < 0.0001f, "challenge starts with the full time budget") && ok;
+
+        Input none;
+        int guard = 0;
+        while (ch.mode == AppMode::Playing && guard < 100000) {
+            update_playing(ch, none, 1.0f / 120.0f);
+            ++guard;
+        }
+        ok = self_test_check(ch.mode == AppMode::Results, "challenge ends and shows results") && ok;
+        // ~20 shots/sec across 30s, allowing for float drift on the final tick.
+        ok = self_test_check(ch.stats.shots >= 595 && ch.stats.shots <= 601, "tracking challenge auto-fires at ~20Hz") && ok;
+        ok = self_test_check(ch.last_run.score == ch.stats.hits, "challenge score equals hits") && ok;
+        float expected_acc = ch.stats.shots > 0 ? static_cast<float>(ch.stats.hits) / static_cast<float>(ch.stats.shots) * 100.0f : 0.0f;
+        ok = self_test_check(std::fabs(ch.last_run.accuracy - expected_acc) < 0.001f, "challenge records accuracy separately from the score") && ok;
+        ok = self_test_check(ch.last_run.kind == ScenarioKind::PillTracking && ch.last_run.preset_name == "TEST PILL", "run records scenario kind and preset name") && ok;
+        ok = self_test_check(static_cast<int>(ch.runs.size()) == 1, "finished challenge is appended to the run history") && ok;
+
+        ok = self_test_check(best_run_score(ch, ScenarioKind::PillTracking, "TEST PILL") == ch.last_run.score, "best_run_score returns the recorded score") && ok;
+        ok = self_test_check(best_run_score(ch, ScenarioKind::WallClick, "TEST PILL") == -1, "best_run_score is -1 for an unplayed scenario") && ok;
+
+        Game reloaded;
+        load_runs(reloaded);
+        ok = self_test_check(static_cast<int>(reloaded.runs.size()) == 1, "saved runs reload from disk") && ok;
+        ok = self_test_check(reloaded.runs[0].kind == ScenarioKind::PillTracking && reloaded.runs[0].preset_name == "TEST PILL" && reloaded.runs[0].score == ch.last_run.score, "reloaded run preserves kind, preset, and score") && ok;
+
+        Game pr;
+        pr.rng.seed(7);
+        init_scenarios(pr);
+        start_scenario(pr, pr.scenarios[1], RunMode::Practice);
+        for (int i = 0; i < 240; ++i) {
+            update_playing(pr, none, 1.0f / 120.0f);
+        }
+        ok = self_test_check(pr.mode == AppMode::Playing && pr.stats.shots == 0, "practice tracking neither auto-fires nor times out") && ok;
+
+        std::remove(g_runs_path_override.c_str());
+        g_runs_path_override.clear();
+    }
+
     if (ok) {
         std::printf("SELF TEST PASSED\n");
         return 0;

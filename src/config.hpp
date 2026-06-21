@@ -59,3 +59,11 @@ void save_current_pill_preset(Game& game);
 std::string settings_path();
 void save_settings(const Game& game);
 void load_settings(Game& game);
+
+// Challenge run history (saved separately from settings).
+extern std::string g_runs_path_override;
+std::string runs_path();
+void save_runs(const Game& game);
+void load_runs(Game& game);
+// Highest recorded challenge score for a scenario/preset, or -1 if none.
+int best_run_score(const Game& game, ScenarioKind kind, const std::string& preset_name);

@@ -5,6 +5,9 @@
 // Main menu entry point (handles editing, layout and drawing for one frame).
 void draw_menu(Game& game, const Input& input, int w, int h);
 
+// Challenge results screen (shown after a challenge run completes).
+void draw_results(const Game& game, int w, int h);
+
 // Text-box editing primitives (also exercised by the self-test).
 void menu_focus_field(Game& game, FieldId id);
 void menu_handle_edit(Game& game, const Input& input);

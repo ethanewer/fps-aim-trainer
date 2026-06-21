@@ -13,7 +13,7 @@ Target spawn_wall_target(Game& game, int skip_index = -1);
 Target spawn_pill_target(Game& game);
 
 // Scenario lifecycle and simulation.
-void start_scenario(Game& game, const ScenarioDef& scenario);
+void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode = RunMode::Practice);
 void update_wall_targets(Game& game, float dt);
 void update_pill_target(Game& game, float dt);
 void update_playing(Game& game, const Input& input, float dt);

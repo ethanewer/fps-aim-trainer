@@ -14,9 +14,15 @@ Guidance for AI agents (and humans) working in this repository. Read this before
   room. Aim uses a fixed-FOV sensitivity model (horizontal FOV locked to 103°, yaw =
   `0.07° per mouse count × in-game sensitivity`). All user-facing distances/sizes/speeds are in
   meters / m·s⁻¹ / m·s⁻², converted to internal units against a 2 m camera-height reference.
+- **Run modes** (`RunMode`): `Practice` (endless) and `Challenge` (a 30 s timed run whose score is
+  hits; tracking auto-fires at `TRACKING_FIRE_HZ`). Accuracy is recorded but is not the score.
+  `start_scenario` takes the mode; `update_playing` runs the timer/auto-fire and calls
+  `finalize_challenge` on expiry, which appends a `RunRecord` and switches to `AppMode::Results`.
 - **Settings & presets** persist to `~/.aim_trainer.cfg` (macOS/Linux) or
   `%APPDATA%\aim_trainer.cfg` (Windows). `load_settings` migrates older file formats;
   the self-test guards those migrations.
+- **Challenge run history** persists separately to `~/.aim_trainer_runs.cfg` via
+  `save_runs`/`load_runs`; `best_run_score` powers the `BEST` readout in the menu and results.
 
 ## Source layout
 
@@ -74,7 +80,9 @@ ok = self_test_check(some_condition, "what this guarantees") && ok;
 
 Drive headless logic directly (no window needed): construct a `Game`, call the relevant
 `config`/`scenario`/`menu` functions, and assert. For deterministic RNG, seed `game.rng.seed(N)`.
-For file I/O tests, set `g_settings_path_override` to a temp path and `std::remove` it after.
+For file I/O tests, set `g_settings_path_override` / `g_runs_path_override` to a temp path and
+`std::remove` it after. (Challenge logic is tested by driving `update_playing` in `Challenge` mode
+to expiry and asserting the recorded `RunRecord` and the saved/reloaded run history.)
 
 ### 2. Lint (warning-clean gate — must stay clean)
 
@@ -103,6 +111,9 @@ every menu or rendering change.
 
 # Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=wall, 1=pill)
 ./build/aim-trainer --debug-shot 1 /tmp/pill.bmp 1920 1080 8
+
+# Challenge results screen: --debug-results <out.bmp> [width height scenario]  (0=wall, 1=pill)
+./build/aim-trainer --debug-results /tmp/results.bmp 1920 1080 0
 
 # All scenarios into a directory:
 ./build/aim-trainer --debug-all /tmp/shots 1920 1080

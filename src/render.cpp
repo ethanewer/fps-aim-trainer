@@ -385,7 +385,16 @@ void draw_world(const Game& game, int w, int h) {
     std::snprintf(line, sizeof(line), "FOV 103  SENS %.3f", game.sensitivity);
     std::string sens_line = line;
     std::string stat_line;
-    if (game.scenario.kind == ScenarioKind::WallClick) {
+    std::string timer_line;
+    if (game.run_mode == RunMode::Challenge) {
+        // Score is hits; accuracy is shown but is not the score.
+        float accuracy = game.stats.shots == 0 ? 0.0f : static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f;
+        std::snprintf(line, sizeof(line), "SCORE %d  ACC %.1f%%", game.stats.hits, accuracy);
+        stat_line = line;
+        float remaining = game.challenge_time_left < 0.0f ? 0.0f : game.challenge_time_left;
+        std::snprintf(line, sizeof(line), "CHALLENGE  TIME %.1f", remaining);
+        timer_line = line;
+    } else if (game.scenario.kind == ScenarioKind::WallClick) {
         float accuracy = game.stats.shots == 0 ? 100.0f : static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f;
         std::snprintf(line, sizeof(line), "HITS %d  SHOTS %d  ACC %.1f%%", game.stats.hits, game.stats.shots, accuracy);
         stat_line = line;
@@ -394,16 +403,21 @@ void draw_world(const Game& game, int w, int h) {
         std::snprintf(line, sizeof(line), "TRACKING %.1f%%  HOLD LMB", tracking);
         stat_line = line;
     }
+    bool challenge = !timer_line.empty();
     float hud_w = std::max({
         260.0f,
         text_width(game.scenario.title, 3.0f) + 36.0f,
         text_width(sens_line, 2.4f) + 36.0f,
         text_width(stat_line, 2.4f) + 36.0f,
+        text_width(timer_line, 2.4f) + 36.0f,
     });
     hud_w = std::min(hud_w, ui_w - 48.0f);
-    rect(24, 22, hud_w, 122, 0, 0, 0, 150);
+    rect(24, 22, hud_w, challenge ? 152.0f : 122.0f, 0, 0, 0, 150);
     text_fit(42, 42, game.scenario.title, 3.0f, hud_w - 36.0f);
     text_fit(42, 78, sens_line, 2.4f, hud_w - 36.0f, 210, 220, 232);
     text_fit(42, 108, stat_line, 2.4f, hud_w - 36.0f, 210, 220, 232);
-    text_fit(42, ui_h - 42, "ESC MENU / QUIT", 2.2f, ui_w - 84.0f, 210, 220, 232);
+    if (challenge) {
+        text_fit(42, 138, timer_line, 2.4f, hud_w - 36.0f, 255, 200, 90);
+    }
+    text_fit(42, ui_h - 42, challenge ? "ESC ABORT" : "ESC MENU / QUIT", 2.2f, ui_w - 84.0f, 210, 220, 232);
 }

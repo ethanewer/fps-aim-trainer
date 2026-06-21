@@ -17,8 +17,20 @@ In the menu:
 - Every setting is a text box. Click a box (or press `TAB`) to focus it, then type the value.
   The first keystroke replaces the shown number; backspace edits it.
 - `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
-- `START` launches the scenario; `SAVE PRESET` / `SAVE GENERAL` persist settings.
+- `PRACTICE` starts an endless run; `CHALLENGE` starts a timed 30-second run.
+  Clicking an already-selected preset in the list also starts a challenge.
+- `SAVE PRESET` / `SAVE GENERAL` persist settings.
 - Esc on the menu (with nothing being edited) quits.
+
+## Challenge Mode
+
+- A challenge lasts 30 seconds; your score is how many shots you hit.
+- Clicking scenarios score on manual clicks. Tracking scenarios auto-fire at 20 Hz, so
+  each on-target moment counts as a hit.
+- Accuracy (`hits / shots`) is recorded but is not part of the score.
+- Every run is saved locally to `~/.aim_trainer_runs.cfg` (time, score, accuracy, shots, ...).
+  The results screen shows the run and your best, and the menu shows `BEST` per preset.
+- `ESC` aborts a run without recording it.
 
 ## Sensitivity Mapping
 

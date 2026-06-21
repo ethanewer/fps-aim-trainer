@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 
 #include "config.hpp"
 #include "world.hpp"
@@ -184,11 +185,14 @@ static bool ray_hits_capsule(Vec3 origin, Vec3 dir, const Target& target, float*
     return false;
 }
 
-void start_scenario(Game& game, const ScenarioDef& scenario) {
+void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     normalize_settings(game);
     game.mode = AppMode::Playing;
     game.active_field = FieldId::None;
     game.scenario = scenario;
+    game.run_mode = mode;
+    game.challenge_time_left = mode == RunMode::Challenge ? CHALLENGE_DURATION_SEC : 0.0f;
+    game.fire_accumulator = 0.0f;
     game.targets.clear();
     game.stats = {};
     game.yaw = 0.0f;
@@ -401,11 +405,30 @@ void update_pill_target(Game& game, float dt) {
     }
 }
 
+// Records the finished challenge run, saves it, and shows the results screen.
+static void finalize_challenge(Game& game) {
+    RunRecord run;
+    run.kind = game.scenario.kind;
+    run.preset_name = game.scenario.kind == ScenarioKind::WallClick ? game.wall_preset_name : game.pill_preset_name;
+    run.score = game.stats.hits;
+    run.shots = game.stats.shots;
+    run.accuracy = game.stats.shots > 0 ? static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f : 0.0f;
+    run.duration = CHALLENGE_DURATION_SEC;
+    run.timestamp = static_cast<long long>(std::time(nullptr));
+    game.runs.push_back(run);
+    game.last_run = run;
+    save_runs(game);
+    game.mode = AppMode::Results;
+}
+
 void update_playing(Game& game, const Input& input, float dt) {
     float radians_per_count = deg_to_rad(YAW_DEG_PER_COUNT * game.sensitivity);
     game.yaw += static_cast<float>(input.rel_x) * radians_per_count;
     game.pitch = clampf(game.pitch - static_cast<float>(input.rel_y) * radians_per_count, -1.45f, 1.45f);
     game.stats.elapsed += dt;
+    if (game.run_mode == RunMode::Challenge) {
+        game.challenge_time_left -= dt;
+    }
 
     if (game.scenario.kind == ScenarioKind::WallClick) {
         update_wall_targets(game, dt);
@@ -415,6 +438,7 @@ void update_playing(Game& game, const Input& input, float dt) {
 
     int hit_index = aimed_target(game);
     if (game.scenario.kind == ScenarioKind::WallClick) {
+        // Clicking always scores on manual shots (score = hits).
         if (input.left_pressed) {
             game.stats.shots += 1;
             if (hit_index >= 0) {
@@ -422,11 +446,27 @@ void update_playing(Game& game, const Input& input, float dt) {
                 game.targets[hit_index] = spawn_wall_target(game, hit_index);
             }
         }
+    } else if (game.run_mode == RunMode::Challenge) {
+        // Tracking challenge: auto-fire at a fixed rate; each on-target tick is a hit.
+        game.fire_accumulator += dt;
+        float interval = 1.0f / TRACKING_FIRE_HZ;
+        while (game.fire_accumulator >= interval) {
+            game.fire_accumulator -= interval;
+            game.stats.shots += 1;
+            if (hit_index >= 0) {
+                game.stats.hits += 1;
+            }
+        }
     } else if (input.left_down) {
+        // Tracking practice: score by time-on-target while firing.
         game.stats.tracking_fire_time += dt;
         if (hit_index >= 0) {
             game.stats.tracking_on_time += dt;
         }
+    }
+
+    if (game.run_mode == RunMode::Challenge && game.challenge_time_left <= 0.0f) {
+        finalize_challenge(game);
     }
 }
 
