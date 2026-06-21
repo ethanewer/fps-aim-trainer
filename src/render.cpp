@@ -107,7 +107,7 @@ static void look_at(Vec3 eye, Vec3 center, Vec3 up) {
 }
 
 static void draw_wall_room(const Game& game) {
-    float wall_distance = game.wall_settings.wall_distance;
+    float wall_distance = game.wall_settings.wall_distance_max;  // back wall at the farthest configured distance
     float wall_z = wall_z_from_distance(wall_distance);
     float back_z = wall_back_z_for_distance(wall_distance);
     float width = wall_width_for_distance(wall_distance);
@@ -358,7 +358,7 @@ void draw_world(const Game& game, int w, int h) {
     else draw_plane360(game);
     GLfloat light_ambient[] = {0.82f, 0.82f, 0.84f, 1.0f};
     GLfloat light_diffuse[] = {0.70f, 0.70f, 0.68f, 1.0f};
-    GLfloat light_pos[] = {-4.0f, game.scenario.map == MapKind::WallRoom ? wall_height_for_distance(game.wall_settings.wall_distance) + 1.5f : tracking_room_height(game.pill_settings) + 3.0f, 1.0f, 1.0f};
+    GLfloat light_pos[] = {-4.0f, game.scenario.map == MapKind::WallRoom ? wall_height_for_distance(game.wall_settings.wall_distance_max) + 1.5f : tracking_room_height(game.pill_settings) + 3.0f, 1.0f, 1.0f};
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, light_ambient);

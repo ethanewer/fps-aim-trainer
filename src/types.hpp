@@ -21,7 +21,7 @@ inline constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
 inline constexpr float TRACKING_ROOM_SIDE_SCALE = 2.5f;
 // Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
 // a fixed rate so tracking quality becomes a discrete hit count.
-inline constexpr float CHALLENGE_DURATION_SEC = 30.0f;
+inline constexpr float CHALLENGE_DURATION_SEC = 60.0f;
 inline constexpr float TRACKING_FIRE_HZ = 20.0f;
 
 enum class AppMode { Menu, Playing, Results };
@@ -36,7 +36,8 @@ enum class FieldId {
     None,
     // Clicking tab
     WallName,
-    WallDist,
+    WallDistMin,
+    WallDistMax,
     WallTargetsMin,
     WallTargetsMax,
     WallRadiusMin,
@@ -72,7 +73,8 @@ inline bool is_tracking(ScenarioKind kind) {
 struct WallClickSettings {
     int target_count_min = 5;
     int target_count_max = 5;
-    float wall_distance = 5.71f;
+    float wall_distance_min = 5.71f;
+    float wall_distance_max = 5.71f;
     float radius_min = 0.09f;
     float radius_max = 0.09f;
     float horizontal_speed_min = 1.02f;
@@ -127,6 +129,7 @@ struct Target {
     float change_timer = 0.0f;
     float radius;
     float acceleration = 0.0f;
+    float distance = 0.0f;  // wall targets: depth in meters (sets the plane bounds)
 };
 
 struct Stats {

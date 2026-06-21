@@ -14,8 +14,9 @@ Guidance for AI agents (and humans) working in this repository. Read this before
   room. Aim uses a fixed-FOV sensitivity model (horizontal FOV locked to 103°, yaw =
   `0.07° per mouse count × in-game sensitivity`). All user-facing distances/sizes/speeds are in
   meters / m·s⁻¹ / m·s⁻², converted to internal units against a 2 m camera-height reference.
-- **Run modes** (`RunMode`): `Practice` (endless) and `Challenge` (a 30 s timed run whose score is
-  hits; tracking auto-fires at `TRACKING_FIRE_HZ`). Accuracy is recorded but is not the score.
+- **Run modes** (`RunMode`): `Practice` (endless) and `Challenge` (a `CHALLENGE_DURATION_SEC` timed
+  run whose score is hits; tracking auto-fires at `TRACKING_FIRE_HZ`). Accuracy is recorded but is
+  not the score.
   `start_scenario` takes the mode; `update_playing` runs the timer/auto-fire and calls
   `finalize_challenge` on expiry, which appends a `RunRecord` and switches to `AppMode::Results`.
 - **Settings & presets** persist to `~/.aim_trainer.cfg` (macOS/Linux) or
@@ -147,9 +148,13 @@ focus highlighting.
   fields fresh-replace on the first keystroke; names sanitize on commit. `field_desc()` in
   `menu.cpp` maps a `FieldId` to its value, kind, limits, and decimals — extend it there when
   adding a setting.
+- **Wall targets have per-target depth.** Wall clicking distance is a min/max range; each target
+  picks its own distance (`Target.distance`) and lives on that depth plane (its own x/y bounds via
+  `wall_target_bounds`). The room/far-plane is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files.
+  format. Don't silently break existing `.cfg` files. (Current: `version 5`; v4 single wall
+  distance migrates to a min==max range.)
 - **Don't commit build artifacts.** `build/`, `target/`, and `debug-shots/` are gitignored; keep
   them out of commits. The repo tracks only source, `Makefile`, `README.md`, and docs.
 - **Git:** branch off `main` before committing; keep commits focused. Run the self-test and a

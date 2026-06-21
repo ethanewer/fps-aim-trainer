@@ -186,7 +186,8 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
         game.wall_preset_name = "MAX RANGE STRESS TEST";
         game.wall_settings.target_count_min = 18;
         game.wall_settings.target_count_max = 18;
-        game.wall_settings.wall_distance = 30.0f;
+        game.wall_settings.wall_distance_min = 2.0f;
+        game.wall_settings.wall_distance_max = 30.0f;
         game.wall_settings.radius_min = 0.44f;
         game.wall_settings.radius_max = 0.45f;
         game.wall_settings.horizontal_speed_min = 7.90f;

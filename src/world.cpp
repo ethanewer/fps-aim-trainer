@@ -108,7 +108,7 @@ float tracking_room_height(const PillTrackingSettings& settings) {
 
 float scene_far_plane(const Game& game) {
     if (game.scenario.map == MapKind::WallRoom) {
-        float wall_distance = game.wall_settings.wall_distance;
+        float wall_distance = game.wall_settings.wall_distance_max;  // room/far-plane sized to the farthest target
         float width = wall_width_for_distance(wall_distance);
         float height = wall_height_for_distance(wall_distance);
         float far_z = wall_z_from_distance(wall_distance) - wall_to_units(game.wall_settings.radius_max);

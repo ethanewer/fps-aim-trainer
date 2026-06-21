@@ -26,9 +26,11 @@ float wall_change_timer(Game& game) {
 
 Target spawn_wall_target(Game& game, int skip_index) {
     float radius = wall_to_units(rand_wall_range(game, game.wall_settings.radius_min, game.wall_settings.radius_max));
-    float wall_width = wall_width_for_distance(game.wall_settings.wall_distance);
-    float wall_height = wall_height_for_distance(game.wall_settings.wall_distance);
-    float wall_z = wall_z_from_distance(game.wall_settings.wall_distance);
+    // Each target picks its own depth in the configured range, so it can spawn closer.
+    float distance = rand_wall_range(game, game.wall_settings.wall_distance_min, game.wall_settings.wall_distance_max);
+    float wall_width = wall_width_for_distance(distance);
+    float wall_height = wall_height_for_distance(distance);
+    float wall_z = wall_z_from_distance(distance);
     float min_x = -wall_width * 0.44f + radius;
     float max_x = wall_width * 0.44f - radius;
     float min_y = wall_height * 0.16f + radius;
@@ -97,7 +99,7 @@ Target spawn_wall_target(Game& game, int skip_index) {
     }
     Vec3 desired = wall_desired_velocity(game);
     float acceleration = wall_to_units(rand_wall_range(game, game.wall_settings.acceleration_min, game.wall_settings.acceleration_max));
-    return {pos, desired, desired, wall_change_timer(game), radius, acceleration};
+    return {pos, desired, desired, wall_change_timer(game), radius, acceleration, distance};
 }
 
 static Vec3 pill_desired_velocity(Game& game) {
@@ -261,7 +263,17 @@ static void lock_disabled_wall_axes(Game& game, Target& target) {
     }
 }
 
-static void resolve_wall_target_collisions(Game& game, float min_x, float max_x, float min_y, float max_y) {
+// Movement bounds for a wall target on its own depth plane.
+static void wall_target_bounds(const Target& target, float& min_x, float& max_x, float& min_y, float& max_y) {
+    float wall_width = wall_width_for_distance(target.distance);
+    float wall_height = wall_height_for_distance(target.distance);
+    min_x = -wall_width * 0.48f + target.radius;
+    max_x = wall_width * 0.48f - target.radius;
+    min_y = wall_height * 0.16f + target.radius;
+    max_y = wall_height * 0.84f - target.radius;
+}
+
+static void resolve_wall_target_collisions(Game& game) {
     for (int i = 0; i < static_cast<int>(game.targets.size()); ++i) {
         for (int j = i + 1; j < static_cast<int>(game.targets.size()); ++j) {
             Target& a = game.targets[i];
@@ -282,10 +294,14 @@ static void resolve_wall_target_collisions(Game& game, float min_x, float max_x,
             float overlap = contact_dist - dist;
             a.pos = a.pos - n * (overlap * 0.5f);
             b.pos = b.pos + n * (overlap * 0.5f);
-            a.pos.x = clampf(a.pos.x, min_x, max_x);
-            b.pos.x = clampf(b.pos.x, min_x, max_x);
-            a.pos.y = clampf(a.pos.y, min_y, max_y);
-            b.pos.y = clampf(b.pos.y, min_y, max_y);
+            float a_min_x, a_max_x, a_min_y, a_max_y;
+            float b_min_x, b_max_x, b_min_y, b_max_y;
+            wall_target_bounds(a, a_min_x, a_max_x, a_min_y, a_max_y);
+            wall_target_bounds(b, b_min_x, b_max_x, b_min_y, b_max_y);
+            a.pos.x = clampf(a.pos.x, a_min_x, a_max_x);
+            b.pos.x = clampf(b.pos.x, b_min_x, b_max_x);
+            a.pos.y = clampf(a.pos.y, a_min_y, a_max_y);
+            b.pos.y = clampf(b.pos.y, b_min_y, b_max_y);
 
             Vec3 rel = b.vel - a.vel;
             float closing_speed = dot(rel, n);
@@ -322,12 +338,8 @@ void update_wall_targets(Game& game, float dt) {
             lock_disabled_wall_axes(game, target);
             target.pos = target.pos + target.vel * step_dt;
 
-            float wall_width = wall_width_for_distance(game.wall_settings.wall_distance);
-            float wall_height = wall_height_for_distance(game.wall_settings.wall_distance);
-            float min_x = -wall_width * 0.48f + target.radius;
-            float max_x = wall_width * 0.48f - target.radius;
-            float min_y = wall_height * 0.16f + target.radius;
-            float max_y = wall_height * 0.84f - target.radius;
+            float min_x, max_x, min_y, max_y;
+            wall_target_bounds(target, min_x, max_x, min_y, max_y);
             if (target.pos.x < min_x || target.pos.x > max_x) {
                 target.pos.x = clampf(target.pos.x, min_x, max_x);
                 target.vel.x = -target.vel.x;
@@ -340,13 +352,7 @@ void update_wall_targets(Game& game, float dt) {
             }
             lock_disabled_wall_axes(game, target);
         }
-        resolve_wall_target_collisions(
-            game,
-            -wall_width_for_distance(game.wall_settings.wall_distance) * 0.48f + wall_to_units(game.wall_settings.radius_max),
-            wall_width_for_distance(game.wall_settings.wall_distance) * 0.48f - wall_to_units(game.wall_settings.radius_max),
-            wall_height_for_distance(game.wall_settings.wall_distance) * 0.16f + wall_to_units(game.wall_settings.radius_max),
-            wall_height_for_distance(game.wall_settings.wall_distance) * 0.84f - wall_to_units(game.wall_settings.radius_max)
-        );
+        resolve_wall_target_collisions(game);
     }
 }
 

@@ -24,7 +24,7 @@ In the menu:
 
 ## Challenge Mode
 
-- A challenge lasts 30 seconds; your score is how many shots you hit.
+- A challenge lasts 60 seconds; your score is how many shots you hit.
 - Clicking scenarios score on manual clicks. Tracking scenarios auto-fire at 20 Hz, so
   each on-target moment counts as a hit.
 - Accuracy (`hits / shots`) is recorded but is not part of the score.
@@ -50,7 +50,7 @@ The app bundle is written to `~/Desktop/Aim Trainer.app`.
 
 ## Modes And Settings
 
-- Wall clicking: wall distance, target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking.
+- Wall clicking: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking. The room is sized to the maximum wall distance.
 - 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.

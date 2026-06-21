@@ -71,9 +71,9 @@ std::string filter_preset_name_draft(const std::string& raw) {
 }
 
 static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
-    settings.wall_distance = clampf(settings.wall_distance, 2.0f, 30.0f);
+    normalize_float_range(settings.wall_distance_min, settings.wall_distance_max, 2.0f, 30.0f);
     normalize_float_range(settings.radius_min, settings.radius_max, 0.03f, 0.45f);
-    int capacity = wall_capacity_for_radius(settings.radius_max, settings.wall_distance);
+    int capacity = wall_capacity_for_radius(settings.radius_max, settings.wall_distance_max);
     normalize_int_range(settings.target_count_min, settings.target_count_max, 1, capacity);
     normalize_float_range(settings.horizontal_speed_min, settings.horizontal_speed_max, 0.0f, 8.0f);
     normalize_float_range(settings.vertical_speed_min, settings.vertical_speed_max, 0.0f, 8.0f);
@@ -204,7 +204,7 @@ void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 4\n";
+    out << "version 5\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
@@ -213,7 +213,8 @@ void save_settings(const Game& game) {
         out << "wall_preset " << std::quoted(preset.name) << " "
             << preset.settings.target_count_min << " "
             << preset.settings.target_count_max << " "
-            << preset.settings.wall_distance << " "
+            << preset.settings.wall_distance_min << " "
+            << preset.settings.wall_distance_max << " "
             << preset.settings.radius_min << " "
             << preset.settings.radius_max << " "
             << preset.settings.horizontal_speed_min << " "
@@ -273,10 +274,27 @@ void load_settings(Game& game) {
             while (row >> value) {
                 values.push_back(value);
             }
-            if (values.size() >= 13) {
+            if (values.size() >= 14) {
                 preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
                 preset.settings.target_count_max = static_cast<int>(std::round(values[1]));
-                preset.settings.wall_distance = values[2];
+                preset.settings.wall_distance_min = values[2];
+                preset.settings.wall_distance_max = values[3];
+                preset.settings.radius_min = values[4];
+                preset.settings.radius_max = values[5];
+                preset.settings.horizontal_speed_min = values[6];
+                preset.settings.horizontal_speed_max = values[7];
+                preset.settings.vertical_speed_min = values[8];
+                preset.settings.vertical_speed_max = values[9];
+                preset.settings.acceleration_min = values[10];
+                preset.settings.acceleration_max = values[11];
+                preset.settings.change_min = values[12];
+                preset.settings.change_max = values[13];
+            } else if (values.size() >= 13) {
+                // v4: a single wall distance -> migrate to a min==max range.
+                preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
+                preset.settings.target_count_max = static_cast<int>(std::round(values[1]));
+                preset.settings.wall_distance_min = values[2];
+                preset.settings.wall_distance_max = values[2];
                 preset.settings.radius_min = values[3];
                 preset.settings.radius_max = values[4];
                 preset.settings.horizontal_speed_min = values[5];
@@ -290,7 +308,8 @@ void load_settings(Game& game) {
             } else if (values.size() >= 12) {
                 preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
                 preset.settings.target_count_max = static_cast<int>(std::round(values[1]));
-                preset.settings.wall_distance = units_to_wall_meters(wall_camera_z() - ROOM_WALL_Z);
+                preset.settings.wall_distance_min = units_to_wall_meters(wall_camera_z() - ROOM_WALL_Z);
+                preset.settings.wall_distance_max = preset.settings.wall_distance_min;
                 preset.settings.radius_min = units_to_wall_meters(values[2]);
                 preset.settings.radius_max = units_to_wall_meters(values[3]);
                 preset.settings.horizontal_speed_min = units_to_wall_meters(values[4]);
@@ -304,7 +323,8 @@ void load_settings(Game& game) {
             } else if (values.size() >= 6) {
                 preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
                 preset.settings.target_count_max = preset.settings.target_count_min;
-                preset.settings.wall_distance = units_to_wall_meters(wall_camera_z() - ROOM_WALL_Z);
+                preset.settings.wall_distance_min = units_to_wall_meters(wall_camera_z() - ROOM_WALL_Z);
+                preset.settings.wall_distance_max = preset.settings.wall_distance_min;
                 preset.settings.radius_min = units_to_wall_meters(values[1]);
                 preset.settings.radius_max = units_to_wall_meters(values[1]);
                 preset.settings.horizontal_speed_min = units_to_wall_meters(values[2]);
@@ -355,7 +375,7 @@ void load_settings(Game& game) {
                 game.wall_settings.target_count_min = static_cast<int>(std::round(value));
                 game.wall_settings.target_count_max = game.wall_settings.target_count_min;
             }
-            else if (key == "wall_distance") game.wall_settings.wall_distance = value;
+            else if (key == "wall_distance") game.wall_settings.wall_distance_min = game.wall_settings.wall_distance_max = value;
             else if (key == "wall_radius") game.wall_settings.radius_min = game.wall_settings.radius_max = units_to_wall_meters(value);
             else if (key == "wall_hspeed") game.wall_settings.horizontal_speed_min = game.wall_settings.horizontal_speed_max = units_to_wall_meters(value);
             else if (key == "wall_vspeed") game.wall_settings.vertical_speed_min = game.wall_settings.vertical_speed_max = units_to_wall_meters(value);

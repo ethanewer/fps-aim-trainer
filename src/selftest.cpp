@@ -55,39 +55,39 @@ int run_self_test() {
 
     // Numeric box editing: fresh-replace, backspace-edits, commit + clamp.
     apply_selected_presets(game);
-    game.wall_settings.wall_distance = 5.71f;
-    menu_focus_field(game, FieldId::WallDist);
+    game.wall_settings.wall_distance_min = 5.71f;
+    menu_focus_field(game, FieldId::WallDistMin);
     ok = self_test_check(game.edit_draft == "5.71" && game.edit_fresh, "focusing a numeric box shows its value and arms fresh-replace") && ok;
     Input digit8;
     digit8.text_input = "8";
     menu_handle_edit(game, digit8);
     ok = self_test_check(game.edit_draft == "8" && !game.edit_fresh, "first keystroke replaces a freshly focused numeric value") && ok;
-    menu_focus_field(game, FieldId::WallDist);
+    menu_focus_field(game, FieldId::WallDistMin);
     Input bs;
     bs.backspace_pressed = true;
     menu_handle_edit(game, bs);
     ok = self_test_check(game.edit_draft == "5.7" && !game.edit_fresh, "backspace edits a fresh numeric value instead of wiping it") && ok;
     Input letters;
     letters.text_input = "ab1.2x.5";  // letters and a second dot are rejected
-    menu_focus_field(game, FieldId::WallDist);
+    menu_focus_field(game, FieldId::WallDistMin);
     menu_handle_edit(game, letters);
     ok = self_test_check(game.edit_draft == "1.25", "numeric boxes only accept digits and a single dot") && ok;
     Input commit_num;
     commit_num.enter_pressed = true;
     menu_handle_edit(game, commit_num);
     normalize_settings(game);
-    ok = self_test_check(std::fabs(game.wall_settings.wall_distance - 2.0f) < 0.0001f, "committed numeric value is clamped into range") && ok;
+    ok = self_test_check(std::fabs(game.wall_settings.wall_distance_min - 2.0f) < 0.0001f, "committed numeric value is clamped into range") && ok;
 
     // Empty numeric draft keeps the previous value.
-    game.wall_settings.wall_distance = 7.0f;
-    menu_focus_field(game, FieldId::WallDist);
+    game.wall_settings.wall_distance_min = 7.0f;
+    menu_focus_field(game, FieldId::WallDistMin);
     while (!game.edit_draft.empty()) {
         Input b;
         b.backspace_pressed = true;
         menu_handle_edit(game, b);
     }
     menu_blur_field(game);
-    ok = self_test_check(std::fabs(game.wall_settings.wall_distance - 7.0f) < 0.0001f, "committing an empty numeric draft keeps the previous value") && ok;
+    ok = self_test_check(std::fabs(game.wall_settings.wall_distance_min - 7.0f) < 0.0001f, "committing an empty numeric draft keeps the previous value") && ok;
 
     // TAB / SHIFT+TAB navigation walks the field order within the active tab.
     game.menu_tab = MenuTab::Clicking;
@@ -95,7 +95,7 @@ int run_self_test() {
     Input tab_fwd;
     tab_fwd.tab_pressed = true;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::WallDist, "tab advances to the next field") && ok;
+    ok = self_test_check(game.active_field == FieldId::WallDistMin, "tab advances to the next field") && ok;
     Input tab_back;
     tab_back.tab_pressed = true;
     tab_back.shift_down = true;
@@ -162,7 +162,7 @@ int run_self_test() {
     game.wall_preset_name = "TINY PASU";
     game.wall_settings.target_count_min = 8;
     game.wall_settings.target_count_max = 8;
-    game.wall_settings.wall_distance = 6.25f;
+    game.wall_settings.wall_distance_min = 6.25f;
     game.wall_settings.radius_min = 0.18f;
     game.wall_settings.radius_max = 0.22f;
     save_current_wall_preset(game);
@@ -177,7 +177,7 @@ int run_self_test() {
     ok = self_test_check(!loaded.wall_presets.empty(), "saved wall presets load") && ok;
     ok = self_test_check(loaded.wall_preset_name == "TINY PASU", "selected named wall preset loads into editor") && ok;
     ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count range loads") && ok;
-    ok = self_test_check(std::fabs(loaded.wall_settings.wall_distance - 6.25f) < 0.0001f, "selected wall distance loads") && ok;
+    ok = self_test_check(std::fabs(loaded.wall_settings.wall_distance_min - 6.25f) < 0.0001f, "selected wall distance loads") && ok;
     ok = self_test_check(std::fabs(loaded.wall_settings.radius_max - 0.22f) < 0.0001f, "selected wall preset radius range loads") && ok;
 
     game.selected_wall_preset = 1;
@@ -239,7 +239,7 @@ int run_self_test() {
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 wall horizontal speed preserves old internal speed") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.vertical_speed_min) - 2.0f) < 0.001f, "actual v2 wall vertical speed preserves old internal speed") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.acceleration_min) - 20.0f) < 0.001f, "actual v2 wall acceleration preserves old internal acceleration") && ok;
-    ok = self_test_check(std::fabs(wall_z_from_distance(actual_v2_loaded.wall_settings.wall_distance) - ROOM_WALL_Z) < 0.001f, "actual v2 wall distance defaults to old wall plane") && ok;
+    ok = self_test_check(std::fabs(wall_z_from_distance(actual_v2_loaded.wall_settings.wall_distance_max) - ROOM_WALL_Z) < 0.001f, "actual v2 wall distance defaults to old wall plane") && ok;
     ok = self_test_check(actual_v2_loaded.pill_preset_name == "SMOOTH PILL", "actual v2 selected pill preset remains selected") && ok;
     ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.width) - 1.24f) < 0.001f, "actual v2 pill width preserves old internal size") && ok;
     ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.speed) - 4.0f) < 0.001f, "actual v2 pill speed preserves old internal speed") && ok;
@@ -290,8 +290,8 @@ int run_self_test() {
     physics.wall_settings.acceleration_min = 0.0f;
     physics.wall_settings.acceleration_max = 0.0f;
     normalize_settings(physics);
-    physics.targets.push_back({{-0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(physics.wall_settings.wall_distance) + 0.45f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1000.0f, wall_to_units(physics.wall_settings.radius_min)});
-    physics.targets.push_back({{0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(physics.wall_settings.wall_distance) + 0.45f}, {-1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 1000.0f, wall_to_units(physics.wall_settings.radius_min)});
+    physics.targets.push_back({{-0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(physics.wall_settings.wall_distance_max) + 0.45f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1000.0f, wall_to_units(physics.wall_settings.radius_min)});
+    physics.targets.push_back({{0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(physics.wall_settings.wall_distance_max) + 0.45f}, {-1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 1000.0f, wall_to_units(physics.wall_settings.radius_min)});
     float before_a = physics.targets[0].vel.x;
     float before_b = physics.targets[1].vel.x;
     update_wall_targets(physics, 1.0f / 120.0f);
@@ -307,8 +307,8 @@ int run_self_test() {
     collision.wall_settings.acceleration_min = 0.0f;
     collision.wall_settings.acceleration_max = 0.0f;
     float collision_radius = wall_to_units(collision.wall_settings.radius_min);
-    collision.targets.push_back({{-collision_radius * 0.88f, ROOM_EYE_HEIGHT, wall_z_from_distance(collision.wall_settings.wall_distance) + 0.45f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
-    collision.targets.push_back({{collision_radius * 0.88f, ROOM_EYE_HEIGHT + 0.05f, wall_z_from_distance(collision.wall_settings.wall_distance) + 0.45f}, {-2.0f, 0.0f, 0.0f}, {-2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
+    collision.targets.push_back({{-collision_radius * 0.88f, ROOM_EYE_HEIGHT, wall_z_from_distance(collision.wall_settings.wall_distance_max) + 0.45f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
+    collision.targets.push_back({{collision_radius * 0.88f, ROOM_EYE_HEIGHT + 0.05f, wall_z_from_distance(collision.wall_settings.wall_distance_max) + 0.45f}, {-2.0f, 0.0f, 0.0f}, {-2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
     update_wall_targets(collision, 1.0f / 120.0f);
     ok = self_test_check(std::fabs(collision.targets[0].vel.y) < 0.0001f && std::fabs(collision.targets[1].vel.y) < 0.0001f, "horizontal-only wall collisions do not create vertical movement") && ok;
 
@@ -402,26 +402,26 @@ int run_self_test() {
     ok = self_test_check(varied_accel, "wall target acceleration varies when acceleration min and max differ") && ok;
 
     Game distance_test;
-    distance_test.wall_settings.wall_distance = 4.0f;
-    float near_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance);
-    distance_test.wall_settings.wall_distance = 8.0f;
-    float far_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance);
+    distance_test.wall_settings.wall_distance_max = 4.0f;
+    float near_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance_max);
+    distance_test.wall_settings.wall_distance_max = 8.0f;
+    float far_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance_max);
     ok = self_test_check(far_wall_z < near_wall_z && std::fabs((near_wall_z - far_wall_z) - wall_to_units(4.0f)) < 0.001f, "wall distance moves wall by configured meters") && ok;
 
     Game wall_far_plane_test;
     init_scenarios(wall_far_plane_test);
     wall_far_plane_test.scenario = wall_far_plane_test.scenarios[0];
-    wall_far_plane_test.wall_settings.wall_distance = 30.0f;
+    wall_far_plane_test.wall_settings.wall_distance_max = 30.0f;
     normalize_settings(wall_far_plane_test);
-    float far_width = wall_width_for_distance(wall_far_plane_test.wall_settings.wall_distance);
-    float far_height = wall_height_for_distance(wall_far_plane_test.wall_settings.wall_distance);
+    float far_width = wall_width_for_distance(wall_far_plane_test.wall_settings.wall_distance_max);
+    float far_height = wall_height_for_distance(wall_far_plane_test.wall_settings.wall_distance_max);
     float far_radius = wall_to_units(wall_far_plane_test.wall_settings.radius_max);
     Vec3 wall_eye = camera_pos(wall_far_plane_test);
     float wall_required_far = std::sqrt(
         (far_width * 0.5f + far_radius) * (far_width * 0.5f + far_radius) +
         (std::fabs(far_height - wall_eye.y) + far_radius) * (std::fabs(far_height - wall_eye.y) + far_radius) +
-        (std::fabs(wall_z_from_distance(wall_far_plane_test.wall_settings.wall_distance) - far_radius - wall_eye.z)) *
-            (std::fabs(wall_z_from_distance(wall_far_plane_test.wall_settings.wall_distance) - far_radius - wall_eye.z))
+        (std::fabs(wall_z_from_distance(wall_far_plane_test.wall_settings.wall_distance_max) - far_radius - wall_eye.z)) *
+            (std::fabs(wall_z_from_distance(wall_far_plane_test.wall_settings.wall_distance_max) - far_radius - wall_eye.z))
     );
     ok = self_test_check(scene_far_plane(wall_far_plane_test) > wall_required_far, "far wall distance stays inside far clipping plane") && ok;
 
@@ -538,6 +538,35 @@ int run_self_test() {
     }
     ok = self_test_check(saw_count_3 && saw_count_4 && saw_count_5, "wall target count samples all integer values in range") && ok;
 
+    // Wall targets sample a depth in the configured distance range.
+    Game wall_depth;
+    wall_depth.rng.seed(515);
+    wall_depth.wall_settings.wall_distance_min = 4.0f;
+    wall_depth.wall_settings.wall_distance_max = 12.0f;
+    wall_depth.wall_settings.radius_min = 0.10f;
+    wall_depth.wall_settings.radius_max = 0.10f;
+    normalize_settings(wall_depth);
+    bool varied_distance = false;
+    bool depth_in_range = true;
+    float first_distance = -1.0f;
+    for (int i = 0; i < 24; ++i) {
+        Target target = spawn_wall_target(wall_depth);
+        if (i == 0) {
+            first_distance = target.distance;
+        }
+        depth_in_range = depth_in_range && target.distance >= 4.0f - 0.001f && target.distance <= 12.0f + 0.001f;
+        varied_distance = varied_distance || std::fabs(target.distance - first_distance) > 0.01f;
+    }
+    ok = self_test_check(depth_in_range, "wall target depth stays within the configured distance range") && ok;
+    ok = self_test_check(varied_distance, "wall target depth varies when min and max distance differ") && ok;
+
+    Game wall_flat;
+    wall_flat.wall_settings.wall_distance_min = 7.0f;
+    wall_flat.wall_settings.wall_distance_max = 7.0f;
+    normalize_settings(wall_flat);
+    Target flat_target = spawn_wall_target(wall_flat);
+    ok = self_test_check(std::fabs(flat_target.distance - 7.0f) < 0.001f, "equal min and max distance spawns all targets on one plane") && ok;
+
     // Challenge mode + run persistence.
     {
         g_runs_path_override = "build/self-test-runs.cfg";
@@ -558,7 +587,9 @@ int run_self_test() {
         }
         ok = self_test_check(ch.mode == AppMode::Results, "challenge ends and shows results") && ok;
         // ~20 shots/sec across 30s, allowing for float drift on the final tick.
-        ok = self_test_check(ch.stats.shots >= 595 && ch.stats.shots <= 601, "tracking challenge auto-fires at ~20Hz") && ok;
+        // ~20 shots/sec across CHALLENGE_DURATION_SEC (60s -> ~1200), allowing for float drift.
+        int expected_shots = static_cast<int>(TRACKING_FIRE_HZ * CHALLENGE_DURATION_SEC);
+        ok = self_test_check(ch.stats.shots >= expected_shots - 5 && ch.stats.shots <= expected_shots + 1, "tracking challenge auto-fires at ~20Hz") && ok;
         ok = self_test_check(ch.last_run.score == ch.stats.hits, "challenge score equals hits") && ok;
         float expected_acc = ch.stats.shots > 0 ? static_cast<float>(ch.stats.hits) / static_cast<float>(ch.stats.shots) * 100.0f : 0.0f;
         ok = self_test_check(std::fabs(ch.last_run.accuracy - expected_acc) < 0.001f, "challenge records accuracy separately from the score") && ok;

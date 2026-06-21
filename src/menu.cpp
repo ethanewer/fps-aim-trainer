@@ -60,10 +60,11 @@ static FieldDesc f_name(std::string* p) {
 }
 
 static FieldDesc field_desc(Game& g, FieldId id) {
-    int capacity = wall_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance);
+    int capacity = wall_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance_max);
     switch (id) {
         case FieldId::WallName: return f_name(&g.wall_preset_name);
-        case FieldId::WallDist: return f_float(&g.wall_settings.wall_distance, 2.0f, 30.0f, 2);
+        case FieldId::WallDistMin: return f_float(&g.wall_settings.wall_distance_min, 2.0f, 30.0f, 2);
+        case FieldId::WallDistMax: return f_float(&g.wall_settings.wall_distance_max, 2.0f, 30.0f, 2);
         case FieldId::WallTargetsMin: return f_int(&g.wall_settings.target_count_min, 1, capacity);
         case FieldId::WallTargetsMax: return f_int(&g.wall_settings.target_count_max, 1, capacity);
         case FieldId::WallRadiusMin: return f_float(&g.wall_settings.radius_min, 0.03f, 0.45f, 2);
@@ -166,7 +167,7 @@ void menu_cancel_edit(Game& g) {
 }
 
 static const FieldId WALL_ORDER[] = {
-    FieldId::WallName, FieldId::WallDist,
+    FieldId::WallName, FieldId::WallDistMin, FieldId::WallDistMax,
     FieldId::WallTargetsMin, FieldId::WallTargetsMax,
     FieldId::WallRadiusMin, FieldId::WallRadiusMax,
     FieldId::WallHSpeedMin, FieldId::WallHSpeedMax,
@@ -591,7 +592,7 @@ static void draw_clicking_tab(Game& g, const Input& in, float left) {
 
     float row_y = CARD_Y + 126.0f;
     const float pitch = 38.0f;
-    row_single(g, in, cl, min_x, row_y, "WALL [M]", FieldId::WallDist, box_w, box_h); row_y += pitch;
+    row_range(g, in, cl, min_x, max_x, row_y, "WALL [M]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "TARGETS", FieldId::WallTargetsMin, FieldId::WallTargetsMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "RADIUS [M]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "H SPEED [M/S]", FieldId::WallHSpeedMin, FieldId::WallHSpeedMax, box_w, box_h); row_y += pitch;
