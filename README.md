@@ -4,11 +4,21 @@ Lightweight native FPS aim trainer prototype.
 
 ## Controls
 
-- Click `START WALL CLICK` or `START PILL TRACK`.
+In a scenario:
+
 - Move the mouse to aim. The scenario captures relative mouse input.
 - Left click shoots in clicking scenarios.
 - Hold left click to score in tracking scenarios.
-- Esc returns to the menu. Esc on the menu quits.
+- Esc returns to the menu.
+
+In the menu:
+
+- Pick a tab (`CLICKING`, `TRACKING`, `GENERAL`) and a preset from the list.
+- Every setting is a text box. Click a box (or press `TAB`) to focus it, then type the value.
+  The first keystroke replaces the shown number; backspace edits it.
+- `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
+- `START` launches the scenario; `SAVE PRESET` / `SAVE GENERAL` persist settings.
+- Esc on the menu (with nothing being edited) quits.
 
 ## Valorant Mapping
 
@@ -43,7 +53,21 @@ make
 
 Windows:
 
-Build `src/main.cpp` with SDL2 and OpenGL linked. The source uses only SDL2, OpenGL 2.1-era calls, and the C++17 standard library.
+Build all `src/*.cpp` files with SDL2 and OpenGL linked. The source uses only SDL2, OpenGL 2.1-era calls, and the C++17 standard library.
+
+## Source Layout
+
+The code is split into focused translation units:
+
+- `math.hpp` — `Vec3` and scalar math helpers.
+- `types.hpp` — shared structs, enums, constants, and the `Game` state.
+- `world.{hpp,cpp}` — unit conversions, room geometry, camera, and RNG helpers.
+- `config.{hpp,cpp}` — settings normalization, presets, and save/load.
+- `scenario.{hpp,cpp}` — target spawning, movement, and scenario simulation.
+- `render.{hpp,cpp}` — bitmap font, 2D primitives, 3D world, and the in-scenario HUD.
+- `menu.{hpp,cpp}` — the text-box settings menu and its editing state machine.
+- `selftest.cpp` — the headless `--self-test` suite.
+- `main.cpp` — SDL setup, the main loop, and the debug/screenshot modes.
 
 ## Debug Screenshots
 

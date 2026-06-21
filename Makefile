@@ -1,7 +1,10 @@
 APP_NAME := Valorant Aim Trainer
 BIN_NAME := aim-trainer
-SRC := src/main.cpp
+SRC_DIR := src
 BUILD_DIR := build
+SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
+DEPS := $(OBJS:.o=.d)
 BIN := $(BUILD_DIR)/$(BIN_NAME)
 DESKTOP_APP := $(HOME)/Desktop/$(APP_NAME).app
 
@@ -18,13 +21,20 @@ else
 	LDFLAGS := $(shell sdl2-config --libs) -lGL
 endif
 
+CXXFLAGS += -MMD -MP
+
 .PHONY: all clean app run
 
 all: $(BIN)
 
-$(BIN): $(SRC)
+$(BIN): $(OBJS)
+	$(CXX) $(OBJS) -o $@ $(LDFLAGS)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+-include $(DEPS)
 
 run: $(BIN)
 	./$(BIN)
