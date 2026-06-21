@@ -25,6 +25,66 @@
 #include "selftest.hpp"
 #include "types.hpp"
 
+struct WindowSize {
+    int w;
+    int h;
+};
+
+static void set_platform_hints() {
+#ifdef _WIN32
+    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+    SDL_SetHint(SDL_HINT_WINDOWS_DPI_SCALING, "0");
+    SDL_SetHint(SDL_HINT_TIMER_RESOLUTION, "0");
+#endif
+}
+
+static bool use_multisample() {
+#ifdef _WIN32
+    return false;
+#else
+    return true;
+#endif
+}
+
+static void set_gl_attributes() {
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, use_multisample() ? 1 : 0);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, use_multisample() ? 4 : 0);
+}
+
+static void enable_multisample() {
+#ifndef _WIN32
+    glEnable(GL_MULTISAMPLE);
+#endif
+}
+
+static WindowSize primary_display_size() {
+    SDL_DisplayMode mode;
+    if (SDL_GetCurrentDisplayMode(0, &mode) == 0 && mode.w >= 320 && mode.h >= 180) {
+        return {mode.w, mode.h};
+    }
+
+    SDL_Rect bounds;
+    if (SDL_GetDisplayBounds(0, &bounds) == 0 && bounds.w >= 320 && bounds.h >= 180) {
+        return {bounds.w, bounds.h};
+    }
+
+    return {1280, 720};
+}
+
+static void sync_text_input(const Game& game) {
+    bool wants_text = game.mode == AppMode::Menu && game.active_field != FieldId::None;
+    SDL_bool active = SDL_IsTextInputActive();
+    if (wants_text && active == SDL_FALSE) {
+        SDL_StartTextInput();
+    } else if (!wants_text && active == SDL_TRUE) {
+        SDL_StopTextInput();
+    }
+}
+
 static void set_mouse_grab(Game& game, bool grabbed) {
     if (game.mouse_grabbed == grabbed) {
         return;
@@ -97,7 +157,7 @@ static bool render_debug_shot(int scenario_index, const std::string& path, int w
         return false;
     }
     SDL_GL_SetSwapInterval(0);
-    glEnable(GL_MULTISAMPLE);
+    enable_multisample();
 
     Game game;
     game.rng.seed(7);
@@ -324,17 +384,15 @@ static int run_debug_mode(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+    set_platform_hints();
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
+    SDL_StopTextInput();
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+    set_gl_attributes();
 
     if (argc > 1 && std::string(argv[1]) == "--self-test") {
         int rc = run_self_test();
@@ -348,7 +406,8 @@ int main(int argc, char** argv) {
         return rc;
     }
 
-    SDL_Window* window = create_gl_window("Aim Trainer", 1280, 720, true);
+    WindowSize fullscreen_size = primary_display_size();
+    SDL_Window* window = create_gl_window("Aim Trainer", fullscreen_size.w, fullscreen_size.h, true);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
@@ -363,8 +422,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     SDL_GL_SetSwapInterval(1);
-    glEnable(GL_MULTISAMPLE);
-    SDL_StartTextInput();
+    enable_multisample();
 
     Game game;
     load_settings(game);
@@ -446,6 +504,7 @@ int main(int argc, char** argv) {
         }
 
         SDL_GL_SwapWindow(window);
+        sync_text_input(game);
     }
 
     set_mouse_grab(game, false);
