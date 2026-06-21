@@ -40,21 +40,16 @@ In the menu:
 
 ## Build
 
+Requires SDL2.
+
 macOS:
 
 ```sh
+brew install sdl2
 make app
 ```
 
-The app bundle is written to `~/Desktop/Aim Trainer.app`.
-
-## Modes And Settings
-
-- Wall clicking: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking. The room is sized to the maximum wall distance.
-- 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
-- Static wall spawns enforce center spacing of at least `3 * radius`.
-- Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
-- User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
+The app bundle is written to `~/Desktop/Aim Trainer.app`. Use `make run` to build and run without packaging a bundle.
 
 Linux:
 
@@ -66,6 +61,14 @@ make
 Windows:
 
 Build all `src/*.cpp` files with SDL2 and OpenGL linked. The source uses only SDL2, OpenGL 2.1-era calls, and the C++17 standard library.
+
+## Modes And Settings
+
+- Wall clicking: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking. The room is sized to the maximum wall distance.
+- 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
+- Static wall spawns enforce center spacing of at least `3 * radius`.
+- Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
+- User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
 
 ## Source Layout
 
