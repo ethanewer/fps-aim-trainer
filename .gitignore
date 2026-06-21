@@ -1,6 +1,7 @@
 build/
 target/
 debug-shots/
+dist/
 
 *.o
 *.dSYM/

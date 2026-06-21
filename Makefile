@@ -5,16 +5,22 @@ BUILD_DIR := build
 SRCS := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
-BIN := $(BUILD_DIR)/$(BIN_NAME)
 DESKTOP_APP := $(HOME)/Desktop/$(APP_NAME).app
 
 UNAME_S := $(shell uname -s)
+WINDOWS_S := $(filter MSYS_NT% MINGW% CYGWIN_NT%,$(UNAME_S))
+EXE_EXT :=
 
 ifeq ($(UNAME_S),Darwin)
 	SDL_PREFIX ?= /opt/homebrew
 	CXX := clang++
 	CXXFLAGS := -std=c++17 -O3 -Wall -Wextra -DGL_SILENCE_DEPRECATION -I$(SDL_PREFIX)/include
 	LDFLAGS := -L$(SDL_PREFIX)/lib -lSDL2 -framework OpenGL -framework Cocoa
+else ifneq ($(WINDOWS_S),)
+	EXE_EXT := .exe
+	CXX ?= g++
+	CXXFLAGS := -std=c++17 -O3 -Wall -Wextra $(shell sdl2-config --cflags)
+	LDFLAGS := $(shell sdl2-config --libs) -lopengl32
 else
 	CXX ?= g++
 	CXXFLAGS := -std=c++17 -O3 -Wall -Wextra $(shell sdl2-config --cflags)
@@ -22,6 +28,7 @@ else
 endif
 
 CXXFLAGS += -MMD -MP
+BIN := $(BUILD_DIR)/$(BIN_NAME)$(EXE_EXT)
 
 .PHONY: all clean app run
 

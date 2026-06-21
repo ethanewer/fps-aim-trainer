@@ -60,7 +60,29 @@ make
 
 Windows:
 
-Build all `src/*.cpp` files with SDL2 and OpenGL linked. The source uses only SDL2, OpenGL 2.1-era calls, and the C++17 standard library.
+Install MSYS2, then install the UCRT64 build dependencies:
+
+```powershell
+winget install --id MSYS2.MSYS2 -e
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-pkgconf make"
+```
+
+Build, test, or run from PowerShell:
+
+```powershell
+.\scripts\windows-build.ps1
+.\scripts\windows-test.ps1
+.\scripts\windows-run.ps1
+```
+
+`windows-run.ps1` runs `make -q` first and rebuilds only when source files are newer than `build/aim-trainer.exe`.
+Install the desktop shortcut with:
+
+```powershell
+.\scripts\windows-install-shortcut.ps1
+```
+
+The shortcut uses the same launcher, so double-clicking it keeps the playable build current with your latest source changes.
 
 ## Modes And Settings
 
