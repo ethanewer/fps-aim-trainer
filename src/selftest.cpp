@@ -312,6 +312,27 @@ int run_self_test() {
     update_wall_targets(collision, 1.0f / 120.0f);
     ok = self_test_check(std::fabs(collision.targets[0].vel.y) < 0.0001f && std::fabs(collision.targets[1].vel.y) < 0.0001f, "horizontal-only wall collisions do not create vertical movement") && ok;
 
+    // Targets on different depth planes must not collide even when they overlap on screen.
+    Game cross_plane;
+    cross_plane.wall_settings.radius_min = 0.10f;
+    cross_plane.wall_settings.radius_max = 0.10f;
+    cross_plane.wall_settings.horizontal_speed_min = 1.0f;
+    cross_plane.wall_settings.horizontal_speed_max = 1.0f;
+    cross_plane.wall_settings.vertical_speed_min = 0.0f;
+    cross_plane.wall_settings.vertical_speed_max = 0.0f;
+    cross_plane.wall_settings.acceleration_min = 0.0f;
+    cross_plane.wall_settings.acceleration_max = 0.0f;
+    float cross_radius = wall_to_units(0.10f);
+    float near_distance = 4.0f;
+    float far_distance = 12.0f;
+    // Overlapping in x (within one radius) but on far-apart depth planes, closing on each other.
+    cross_plane.targets.push_back({{0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(near_distance) + 0.45f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1000.0f, cross_radius, 0.0f, near_distance});
+    cross_plane.targets.push_back({{cross_radius, ROOM_EYE_HEIGHT, wall_z_from_distance(far_distance) + 0.45f}, {-1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 1000.0f, cross_radius, 0.0f, far_distance});
+    float cross_before_a = cross_plane.targets[0].vel.x;
+    float cross_before_b = cross_plane.targets[1].vel.x;
+    update_wall_targets(cross_plane, 1.0f / 120.0f);
+    ok = self_test_check(std::fabs(cross_plane.targets[0].vel.x - cross_before_a) < 0.0001f && std::fabs(cross_plane.targets[1].vel.x - cross_before_b) < 0.0001f, "targets on different depth planes do not collide when overlapping on screen") && ok;
+
     Game spawn_test;
     init_scenarios(spawn_test);
     spawn_test.wall_settings.radius_min = 0.16f;

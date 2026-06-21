@@ -278,10 +278,13 @@ static void resolve_wall_target_collisions(Game& game) {
         for (int j = i + 1; j < static_cast<int>(game.targets.size()); ++j) {
             Target& a = game.targets[i];
             Target& b = game.targets[j];
+            float contact_dist = a.radius + b.radius;
+            if (std::fabs(a.pos.z - b.pos.z) >= contact_dist) {
+                continue;  // on different depth planes — cannot be touching (no spurious 2D collision)
+            }
             Vec3 delta = b.pos - a.pos;
             delta.z = 0.0f;
             float dist = length(delta);
-            float contact_dist = a.radius + b.radius;
             if (dist <= 0.0001f) {
                 delta = {1.0f, 0.0f, 0.0f};
                 dist = 1.0f;
