@@ -413,6 +413,17 @@ int run_self_test() {
     update_wall_targets(physics, 1.0f / 120.0f);
     ok = self_test_check(std::fabs(physics.targets[0].vel.x - before_a) < 0.0001f && std::fabs(physics.targets[1].vel.x - before_b) < 0.0001f, "wall targets do not interact before visible contact") && ok;
 
+    Game moving_axis;
+    moving_axis.wall_settings.horizontal_speed_min = 0.0f;
+    moving_axis.wall_settings.horizontal_speed_max = 0.0f;
+    moving_axis.wall_settings.vertical_speed_min = 0.0f;
+    moving_axis.wall_settings.vertical_speed_max = 2.0f;
+    normalize_settings(moving_axis);
+    for (int i = 0; i < 20; ++i) {
+        Vec3 velocity = wall_desired_velocity(moving_axis);
+        ok = self_test_check(std::fabs(velocity.x) < 0.0001f && std::fabs(velocity.y) > 0.0001f, "enabled wall movement axis cannot sample a still velocity") && ok;
+    }
+
     Game collision;
     collision.wall_settings.radius_min = 0.25f;
     collision.wall_settings.radius_max = 0.25f;
@@ -425,8 +436,151 @@ int run_self_test() {
     float collision_radius = wall_to_units(collision.wall_settings.radius_min);
     collision.targets.push_back({{-collision_radius * 0.88f, ROOM_EYE_HEIGHT, wall_z_from_distance(collision.wall_settings.wall_distance_max) + 0.45f}, {2.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
     collision.targets.push_back({{collision_radius * 0.88f, ROOM_EYE_HEIGHT + 0.05f, wall_z_from_distance(collision.wall_settings.wall_distance_max) + 0.45f}, {-2.0f, 0.0f, 0.0f}, {-2.0f, 0.0f, 0.0f}, 1000.0f, collision_radius});
+    float collision_before_a = collision.targets[0].vel.x;
+    float collision_before_b = collision.targets[1].vel.x;
     update_wall_targets(collision, 1.0f / 120.0f);
-    ok = self_test_check(std::fabs(collision.targets[0].vel.y) < 0.0001f && std::fabs(collision.targets[1].vel.y) < 0.0001f, "horizontal-only wall collisions do not create vertical movement") && ok;
+    ok = self_test_check(
+        std::fabs(collision.targets[0].vel.x - collision_before_a) < 0.0001f &&
+            std::fabs(collision.targets[1].vel.x - collision_before_b) < 0.0001f &&
+            std::fabs(collision.targets[0].vel.y) < 0.0001f &&
+            std::fabs(collision.targets[1].vel.y) < 0.0001f,
+        "overlapping wall targets do not rewrite each other's movement"
+    ) && ok;
+    for (int i = 0; i < 12; ++i) {
+        update_wall_targets(collision, 1.0f / 120.0f);
+    }
+    ok = self_test_check(
+        collision.targets[0].vel.x > 0.0f &&
+            collision.targets[1].vel.x < 0.0f &&
+            std::fabs(collision.targets[0].vel.y) < 0.0001f &&
+            std::fabs(collision.targets[1].vel.y) < 0.0001f,
+        "overlapping wall targets do not become stuck together or coupled over time"
+    ) && ok;
+
+    Game wall_edge;
+    wall_edge.wall_settings.radius_min = 0.10f;
+    wall_edge.wall_settings.radius_max = 0.10f;
+    wall_edge.wall_settings.horizontal_speed_min = 2.0f;
+    wall_edge.wall_settings.horizontal_speed_max = 2.0f;
+    wall_edge.wall_settings.vertical_speed_min = 0.0f;
+    wall_edge.wall_settings.vertical_speed_max = 0.0f;
+    wall_edge.wall_settings.acceleration_min = 0.0f;
+    wall_edge.wall_settings.acceleration_max = 0.0f;
+    normalize_settings(wall_edge);
+    float edge_radius = wall_to_units(wall_edge.wall_settings.radius_min);
+    float edge_distance = wall_edge.wall_settings.wall_distance_max;
+    float edge_max_x = wall_width_for_distance(edge_distance) * 0.48f - edge_radius;
+    wall_edge.targets.push_back({
+        {edge_max_x - edge_radius * 0.5f, ROOM_EYE_HEIGHT, wall_z_from_distance(edge_distance) + 0.45f},
+        {wall_to_units(2.0f), 0.0f, 0.0f},
+        {wall_to_units(2.0f), 0.0f, 0.0f},
+        1000.0f,
+        edge_radius,
+        0.0f,
+        edge_distance
+    });
+    update_wall_targets(wall_edge, 1.0f / 120.0f);
+    ok = self_test_check(
+        wall_edge.targets[0].pos.x <= edge_max_x + 0.001f &&
+            wall_edge.targets[0].vel.x < 0.0f &&
+            wall_edge.targets[0].desired_vel.x < 0.0f,
+        "wall targets steer inward before edge contact instead of bouncing off the wall"
+    ) && ok;
+
+    Game wall_contain;
+    wall_contain.wall_settings.radius_min = 0.10f;
+    wall_contain.wall_settings.radius_max = 0.10f;
+    wall_contain.wall_settings.horizontal_speed_min = 2.0f;
+    wall_contain.wall_settings.horizontal_speed_max = 2.0f;
+    wall_contain.wall_settings.vertical_speed_min = 0.0f;
+    wall_contain.wall_settings.vertical_speed_max = 0.0f;
+    wall_contain.wall_settings.acceleration_min = 0.05f;
+    wall_contain.wall_settings.acceleration_max = 0.05f;
+    normalize_settings(wall_contain);
+    float contain_radius = wall_to_units(wall_contain.wall_settings.radius_min);
+    float contain_distance = wall_contain.wall_settings.wall_distance_max;
+    float contain_max_x = wall_width_for_distance(contain_distance) * 0.48f - contain_radius;
+    wall_contain.targets.push_back({
+        {contain_max_x + contain_radius * 0.25f, ROOM_EYE_HEIGHT, wall_z_from_distance(contain_distance) + 0.45f},
+        {wall_to_units(2.0f), 0.0f, 0.0f},
+        {wall_to_units(2.0f), 0.0f, 0.0f},
+        1000.0f,
+        contain_radius,
+        wall_to_units(0.05f),
+        contain_distance
+    });
+    update_wall_targets(wall_contain, 1.0f / 120.0f);
+    ok = self_test_check(
+        wall_contain.targets[0].pos.x <= contain_max_x + 0.001f &&
+            wall_contain.targets[0].vel.x < -0.0001f &&
+            wall_contain.targets[0].desired_vel.x < -0.0001f,
+        "wall boundary containment immediately restores inward movement"
+    ) && ok;
+    wall_contain.targets[0] = {
+        {contain_max_x + contain_radius * 0.25f, ROOM_EYE_HEIGHT, wall_z_from_distance(contain_distance) + 0.45f},
+        {0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f},
+        1000.0f,
+        contain_radius,
+        wall_to_units(0.05f),
+        contain_distance
+    };
+    update_wall_targets(wall_contain, 1.0f / 120.0f);
+    ok = self_test_check(
+        wall_contain.targets[0].vel.x < -0.0001f &&
+            wall_contain.targets[0].desired_vel.x < -0.0001f,
+        "wall boundary containment recovers from a zero desired velocity on enabled movement"
+    ) && ok;
+
+    Game wide_guard;
+    wide_guard.wall_settings.radius_min = 0.10f;
+    wide_guard.wall_settings.radius_max = 0.10f;
+    wide_guard.wall_settings.horizontal_speed_min = 8.0f;
+    wide_guard.wall_settings.horizontal_speed_max = 8.0f;
+    wide_guard.wall_settings.vertical_speed_min = 0.0f;
+    wide_guard.wall_settings.vertical_speed_max = 0.0f;
+    wide_guard.wall_settings.acceleration_min = 0.05f;
+    wide_guard.wall_settings.acceleration_max = 0.05f;
+    normalize_settings(wide_guard);
+    float wide_radius = wall_to_units(wide_guard.wall_settings.radius_min);
+    float wide_distance = wide_guard.wall_settings.wall_distance_max;
+    wide_guard.targets.push_back({
+        {0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(wide_distance) + 0.45f},
+        {wall_to_units(8.0f), 0.0f, 0.0f},
+        {wall_to_units(8.0f), 0.0f, 0.0f},
+        1000.0f,
+        wide_radius,
+        wall_to_units(0.05f),
+        wide_distance
+    });
+    update_wall_targets(wide_guard, 1.0f / 120.0f);
+    ok = self_test_check(wide_guard.targets[0].desired_vel.x > 0.0f, "wall boundary guard does not couple edge steering to the center lane") && ok;
+
+    Game large_vertical;
+    large_vertical.wall_settings.radius_min = WALL_TARGET_RADIUS_MAX_M;
+    large_vertical.wall_settings.radius_max = WALL_TARGET_RADIUS_MAX_M;
+    large_vertical.wall_settings.horizontal_speed_min = 0.0f;
+    large_vertical.wall_settings.horizontal_speed_max = 0.0f;
+    large_vertical.wall_settings.vertical_speed_min = 2.0f;
+    large_vertical.wall_settings.vertical_speed_max = 2.0f;
+    large_vertical.wall_settings.acceleration_min = 0.05f;
+    large_vertical.wall_settings.acceleration_max = 0.05f;
+    normalize_settings(large_vertical);
+    float large_radius = wall_to_units(large_vertical.wall_settings.radius_max);
+    float large_distance = large_vertical.wall_settings.wall_distance_max;
+    float large_min_y = wall_height_for_distance(large_distance) * 0.16f + large_radius;
+    float large_max_y = wall_height_for_distance(large_distance) * 0.84f - large_radius;
+    large_vertical.targets.push_back({
+        {0.0f, (large_min_y + large_max_y) * 0.5f, wall_z_from_distance(large_distance) + 0.45f},
+        {0.0f, wall_to_units(2.0f), 0.0f},
+        {0.0f, wall_to_units(2.0f), 0.0f},
+        1000.0f,
+        large_radius,
+        wall_to_units(0.05f),
+        large_distance
+    });
+    update_wall_targets(large_vertical, 1.0f / 120.0f);
+    ok = self_test_check(large_vertical.targets[0].desired_vel.y > 0.0f, "large vertical wall targets are not edge-steered in the center lane") && ok;
 
     // Targets on different depth planes must not collide even when they overlap on screen.
     Game cross_plane;
@@ -649,8 +803,14 @@ int run_self_test() {
         tracking_to_units(radial_max_test.pill_settings.width) * 0.5f
     });
     update_pill_target(radial_max_test, 1.0f);
-    float radial_max_dist = units_to_tracking_meters(std::sqrt(radial_max_test.targets[0].pos.x * radial_max_test.targets[0].pos.x + radial_max_test.targets[0].pos.z * radial_max_test.targets[0].pos.z));
-    ok = self_test_check(radial_max_dist <= 4.001f && radial_max_test.targets[0].vel.x <= 0.001f, "pill cannot drift past configured max distance under low acceleration") && ok;
+    Vec3 radial_max_after{radial_max_test.targets[0].pos.x, 0.0f, radial_max_test.targets[0].pos.z};
+    float radial_max_dist = units_to_tracking_meters(length(radial_max_after));
+    ok = self_test_check(
+        radial_max_dist <= 4.001f &&
+            dot(radial_max_test.targets[0].vel, radial_max_after) <= 0.001f &&
+            length(radial_max_test.targets[0].vel) > 0.0001f,
+        "pill cannot drift past configured max distance or stop there under low acceleration"
+    ) && ok;
 
     Game radial_min_test;
     radial_min_test.pill_settings.distance_min = 2.0f;
@@ -668,6 +828,28 @@ int run_self_test() {
     update_pill_target(radial_min_test, 1.0f);
     float radial_min_dist = units_to_tracking_meters(std::sqrt(radial_min_test.targets[0].pos.x * radial_min_test.targets[0].pos.x + radial_min_test.targets[0].pos.z * radial_min_test.targets[0].pos.z));
     ok = self_test_check(radial_min_dist >= 1.999f && radial_min_test.targets[0].vel.x >= -0.001f, "pill cannot drift inside configured min distance under low acceleration") && ok;
+
+    Game radial_steer_test;
+    radial_steer_test.rng.seed(987);
+    radial_steer_test.pill_settings.distance_min = 2.0f;
+    radial_steer_test.pill_settings.distance_max = 4.0f;
+    radial_steer_test.pill_settings.speed = 2.0f;
+    radial_steer_test.pill_settings.acceleration = 0.0f;
+    normalize_settings(radial_steer_test);
+    radial_steer_test.targets.push_back({
+        {tracking_to_units(3.85f), PLANE_EYE_HEIGHT, 0.0f},
+        {tracking_to_units(2.0f), 0.0f, 0.0f},
+        {tracking_to_units(2.0f), 0.0f, 0.0f},
+        10.0f,
+        tracking_to_units(radial_steer_test.pill_settings.width) * 0.5f
+    });
+    update_pill_target(radial_steer_test, 1.0f / 120.0f);
+    Vec3 radial_after{radial_steer_test.targets[0].pos.x, 0.0f, radial_steer_test.targets[0].pos.z};
+    ok = self_test_check(
+        dot(radial_steer_test.targets[0].vel, radial_after) <= 0.001f &&
+            dot(radial_steer_test.targets[0].desired_vel, radial_after) <= 0.001f,
+        "pill redirects inward near the configured outer radius before clamp contact"
+    ) && ok;
 
     Game count_sampling;
     count_sampling.rng.seed(789);

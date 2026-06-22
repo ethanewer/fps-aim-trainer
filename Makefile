@@ -1,4 +1,5 @@
 APP_NAME := Aim Trainer
+DEV_APP_NAME := Aim Trainer Dev
 BIN_NAME := aim-trainer
 SRC_DIR := src
 BUILD_DIR := build
@@ -6,6 +7,7 @@ SRCS := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
 DESKTOP_APP := $(HOME)/Desktop/$(APP_NAME).app
+DESKTOP_DEV_APP := $(HOME)/Desktop/$(DEV_APP_NAME).app
 
 UNAME_S := $(shell uname -s)
 WINDOWS_S := $(filter MSYS_NT% MINGW% CYGWIN_NT%,$(UNAME_S))
@@ -30,7 +32,7 @@ endif
 CXXFLAGS += -MMD -MP
 BIN := $(BUILD_DIR)/$(BIN_NAME)$(EXE_EXT)
 
-.PHONY: all clean app run
+.PHONY: all clean app app-dev app-stable run install-app-bundle
 
 all: $(BIN)
 
@@ -46,14 +48,22 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 run: $(BIN)
 	./$(BIN)
 
-app: $(BIN)
-	rm -rf "$(DESKTOP_APP)"
-	mkdir -p "$(DESKTOP_APP)/Contents/MacOS" "$(DESKTOP_APP)/Contents/Frameworks"
-	cp "$(BIN)" "$(DESKTOP_APP)/Contents/MacOS/$(BIN_NAME)"
-	cp "$(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib" "$(DESKTOP_APP)/Contents/Frameworks/"
-	chmod u+w "$(DESKTOP_APP)/Contents/Frameworks/libSDL2-2.0.0.dylib"
-	install_name_tool -change "$(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib" "@executable_path/../Frameworks/libSDL2-2.0.0.dylib" "$(DESKTOP_APP)/Contents/MacOS/$(BIN_NAME)" || true
-	install_name_tool -change "$(SDL_PREFIX)/opt/sdl2/lib/libSDL2-2.0.0.dylib" "@executable_path/../Frameworks/libSDL2-2.0.0.dylib" "$(DESKTOP_APP)/Contents/MacOS/$(BIN_NAME)" || true
+app: app-stable
+
+app-dev: $(BIN)
+	$(MAKE) install-app-bundle APP_BUNDLE="$(DESKTOP_DEV_APP)" BUNDLE_NAME="$(DEV_APP_NAME)" BUNDLE_ID="local.aim-trainer.dev"
+
+app-stable: $(BIN)
+	$(MAKE) install-app-bundle APP_BUNDLE="$(DESKTOP_APP)" BUNDLE_NAME="$(APP_NAME)" BUNDLE_ID="local.aim-trainer"
+
+install-app-bundle:
+	rm -rf "$(APP_BUNDLE)"
+	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Frameworks"
+	cp "$(BIN)" "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME)"
+	cp "$(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib" "$(APP_BUNDLE)/Contents/Frameworks/"
+	chmod u+w "$(APP_BUNDLE)/Contents/Frameworks/libSDL2-2.0.0.dylib"
+	install_name_tool -change "$(SDL_PREFIX)/lib/libSDL2-2.0.0.dylib" "@executable_path/../Frameworks/libSDL2-2.0.0.dylib" "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME)" || true
+	install_name_tool -change "$(SDL_PREFIX)/opt/sdl2/lib/libSDL2-2.0.0.dylib" "@executable_path/../Frameworks/libSDL2-2.0.0.dylib" "$(APP_BUNDLE)/Contents/MacOS/$(BIN_NAME)" || true
 	printf '%s\n' \
 	'<?xml version="1.0" encoding="UTF-8"?>' \
 	'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -62,17 +72,17 @@ app: $(BIN)
 	'  <key>CFBundleExecutable</key>' \
 	'  <string>$(BIN_NAME)</string>' \
 	'  <key>CFBundleIdentifier</key>' \
-	'  <string>local.aim-trainer</string>' \
+	'  <string>$(BUNDLE_ID)</string>' \
 	'  <key>CFBundleName</key>' \
-	'  <string>$(APP_NAME)</string>' \
+	'  <string>$(BUNDLE_NAME)</string>' \
 	'  <key>CFBundlePackageType</key>' \
 	'  <string>APPL</string>' \
 	'  <key>LSMinimumSystemVersion</key>' \
 	'  <string>10.15</string>' \
 	'</dict>' \
-	'</plist>' > "$(DESKTOP_APP)/Contents/Info.plist"
-	xattr -cr "$(DESKTOP_APP)"
-	codesign --force --deep --sign - "$(DESKTOP_APP)"
+	'</plist>' > "$(APP_BUNDLE)/Contents/Info.plist"
+	xattr -cr "$(APP_BUNDLE)"
+	codesign --force --deep --sign - "$(APP_BUNDLE)"
 
 clean:
 	rm -rf $(BUILD_DIR)

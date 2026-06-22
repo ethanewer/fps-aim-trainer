@@ -49,10 +49,16 @@ macOS:
 
 ```sh
 brew install sdl2
-make app
+make app-dev
 ```
 
-The app bundle is written to `~/Desktop/Aim Trainer.app`. Use `make run` to build and run without packaging a bundle.
+The dev app bundle is written to `~/Desktop/Aim Trainer Dev.app`. It is the normal local-development app and should be refreshed after source changes. The stable app bundle is `~/Desktop/Aim Trainer.app`; update it only when intentionally promoting a verified build:
+
+```sh
+make app-stable
+```
+
+`make app` is an alias for `make app-stable`. Use `make run` to build and run without packaging a bundle.
 
 Linux:
 

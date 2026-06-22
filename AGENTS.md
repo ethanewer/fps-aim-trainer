@@ -54,7 +54,8 @@ Requires SDL2 (`brew install sdl2` on macOS). From the repo root:
 make            # build build/aim-trainer (compiles all src/*.cpp, links SDL2 + OpenGL)
 make run        # build and run
 make clean      # remove build/
-make app        # build and install "~/Desktop/Aim Trainer.app" (macOS bundle, ad-hoc signed)
+make app-dev    # build and install "~/Desktop/Aim Trainer Dev.app" (macOS dev bundle)
+make app-stable # build and install "~/Desktop/Aim Trainer.app" (macOS stable bundle)
 ```
 
 The Makefile globs `src/*.cpp` and tracks header deps (`-MMD -MP`), so adding a new `.cpp` needs no
@@ -79,6 +80,15 @@ build to stable, run:
 Without `-UpdateStable`, the shortcut installer may refresh shortcuts but must preserve the current
 stable executable. After completing work and verifying that it is working and stable, ask the user
 whether they want to promote the current dev build to the stable `Aim Trainer` shortcut.
+
+### macOS desktop apps
+
+macOS also has two Desktop apps with intentionally different behavior:
+
+- `Aim Trainer Dev.app` is the normal local-development app. Refresh it with `make app-dev` after
+  verified source changes so local manual testing launches the latest build.
+- `Aim Trainer.app` is the stable app. It must stay stable and must not be updated during normal
+  development unless the user explicitly asks to promote the current verified build.
 
 ## Testing & agent dev tools
 
@@ -191,3 +201,5 @@ focus highlighting.
 5. `README.md` / this file updated if behavior, controls, build, or layout changed.
 6. On Windows, ask whether to promote the verified dev build to stable; do not update stable unless
    the user says yes.
+7. On macOS, refresh `Aim Trainer Dev.app` after verified source changes; do not update
+   `Aim Trainer.app` unless the user explicitly asks for stable promotion.

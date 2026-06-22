@@ -7,9 +7,17 @@
 #include "config.hpp"
 #include "world.hpp"
 
+static float wall_axis_speed(Game& game, float min_m, float max_m) {
+    float speed = wall_to_units(rand_wall_range(game, min_m, max_m));
+    if (speed <= 0.0001f && max_m > 0.0f) {
+        speed = wall_to_units(max_m);
+    }
+    return speed;
+}
+
 Vec3 wall_desired_velocity(Game& game) {
-    float h_speed = wall_to_units(rand_wall_range(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max));
-    float v_speed = wall_to_units(rand_wall_range(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max));
+    float h_speed = wall_axis_speed(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max);
+    float v_speed = wall_axis_speed(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max);
     return {
         random_sign(game) * h_speed,
         random_sign(game) * v_speed,
@@ -274,52 +282,91 @@ static void wall_target_bounds(const Target& target, float& min_x, float& max_x,
     max_y = wall_height * 0.84f - target.radius;
 }
 
-static void resolve_wall_target_collisions(Game& game) {
-    for (int i = 0; i < static_cast<int>(game.targets.size()); ++i) {
-        for (int j = i + 1; j < static_cast<int>(game.targets.size()); ++j) {
-            Target& a = game.targets[i];
-            Target& b = game.targets[j];
-            float contact_dist = a.radius + b.radius;
-            if (std::fabs(a.pos.z - b.pos.z) >= contact_dist) {
-                continue;  // on different depth planes — cannot be touching (no spurious 2D collision)
-            }
-            Vec3 delta = b.pos - a.pos;
-            delta.z = 0.0f;
-            float dist = length(delta);
-            if (dist <= 0.0001f) {
-                delta = {1.0f, 0.0f, 0.0f};
-                dist = 1.0f;
-            }
-            if (dist >= contact_dist) {
-                continue;
-            }
+static float wall_boundary_guard(float speed, float acceleration, float radius, float span) {
+    float frame_room = std::fabs(speed) * (1.0f / 30.0f);
+    float max_guard = span * 0.45f;
+    if (acceleration > 0.0001f) {
+        return std::min(max_guard, std::max(radius * 2.0f, speed * speed / (2.0f * acceleration) + frame_room));
+    }
+    return std::min(max_guard, std::max(radius * 2.0f, frame_room));
+}
 
-            Vec3 n = delta / dist;
-            float overlap = contact_dist - dist;
-            a.pos = a.pos - n * (overlap * 0.5f);
-            b.pos = b.pos + n * (overlap * 0.5f);
-            float a_min_x, a_max_x, a_min_y, a_max_y;
-            float b_min_x, b_max_x, b_min_y, b_max_y;
-            wall_target_bounds(a, a_min_x, a_max_x, a_min_y, a_max_y);
-            wall_target_bounds(b, b_min_x, b_max_x, b_min_y, b_max_y);
-            a.pos.x = clampf(a.pos.x, a_min_x, a_max_x);
-            b.pos.x = clampf(b.pos.x, b_min_x, b_max_x);
-            a.pos.y = clampf(a.pos.y, a_min_y, a_max_y);
-            b.pos.y = clampf(b.pos.y, b_min_y, b_max_y);
+static float signed_wall_axis_speed(Game& game, float min_m, float max_m, float sign, float current) {
+    float speed = std::fabs(current);
+    if (speed <= 0.0001f) {
+        speed = wall_axis_speed(game, min_m, max_m);
+    }
+    return sign * speed;
+}
 
-            Vec3 rel = b.vel - a.vel;
-            float closing_speed = dot(rel, n);
-            if (closing_speed < 0.0f) {
-                Vec3 impulse = n * closing_speed;
-                a.vel = a.vel + impulse;
-                b.vel = b.vel - impulse;
-                a.desired_vel = a.vel;
-                b.desired_vel = b.vel;
-            }
-            lock_disabled_wall_axes(game, a);
-            lock_disabled_wall_axes(game, b);
+static void steer_wall_target_from_bounds(Game& game, Target& target) {
+    float min_x, max_x, min_y, max_y;
+    wall_target_bounds(target, min_x, max_x, min_y, max_y);
+    float guard_x = wall_boundary_guard(target.vel.x, target.acceleration, target.radius, max_x - min_x);
+    float guard_y = wall_boundary_guard(target.vel.y, target.acceleration, target.radius, max_y - min_y);
+    if (target.pos.x <= min_x + guard_x && target.desired_vel.x < 0.0f) {
+        target.desired_vel.x = signed_wall_axis_speed(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max, 1.0f, target.desired_vel.x);
+    } else if (target.pos.x >= max_x - guard_x && target.desired_vel.x > 0.0f) {
+        target.desired_vel.x = signed_wall_axis_speed(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max, -1.0f, target.desired_vel.x);
+    }
+    if (target.pos.y <= min_y + guard_y && target.desired_vel.y < 0.0f) {
+        target.desired_vel.y = signed_wall_axis_speed(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max, 1.0f, target.desired_vel.y);
+    } else if (target.pos.y >= max_y - guard_y && target.desired_vel.y > 0.0f) {
+        target.desired_vel.y = signed_wall_axis_speed(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max, -1.0f, target.desired_vel.y);
+    }
+    lock_disabled_wall_axes(game, target);
+}
+
+static void contain_wall_target(Game& game, Target& target) {
+    float min_x, max_x, min_y, max_y;
+    wall_target_bounds(target, min_x, max_x, min_y, max_y);
+    if (target.pos.x < min_x) {
+        target.pos.x = min_x;
+        if (target.desired_vel.x <= 0.0001f) {
+            target.desired_vel.x = signed_wall_axis_speed(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max, 1.0f, target.desired_vel.x);
+        }
+        if (target.vel.x < 0.0f) {
+            target.vel.x = target.desired_vel.x;
+        }
+        if (std::fabs(target.vel.x) <= 0.0001f && target.desired_vel.x > 0.0f) {
+            target.vel.x = target.desired_vel.x;
+        }
+    } else if (target.pos.x > max_x) {
+        target.pos.x = max_x;
+        if (target.desired_vel.x >= -0.0001f) {
+            target.desired_vel.x = signed_wall_axis_speed(game, game.wall_settings.horizontal_speed_min, game.wall_settings.horizontal_speed_max, -1.0f, target.desired_vel.x);
+        }
+        if (target.vel.x > 0.0f) {
+            target.vel.x = target.desired_vel.x;
+        }
+        if (std::fabs(target.vel.x) <= 0.0001f && target.desired_vel.x < 0.0f) {
+            target.vel.x = target.desired_vel.x;
         }
     }
+    if (target.pos.y < min_y) {
+        target.pos.y = min_y;
+        if (target.desired_vel.y <= 0.0001f) {
+            target.desired_vel.y = signed_wall_axis_speed(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max, 1.0f, target.desired_vel.y);
+        }
+        if (target.vel.y < 0.0f) {
+            target.vel.y = target.desired_vel.y;
+        }
+        if (std::fabs(target.vel.y) <= 0.0001f && target.desired_vel.y > 0.0f) {
+            target.vel.y = target.desired_vel.y;
+        }
+    } else if (target.pos.y > max_y) {
+        target.pos.y = max_y;
+        if (target.desired_vel.y >= -0.0001f) {
+            target.desired_vel.y = signed_wall_axis_speed(game, game.wall_settings.vertical_speed_min, game.wall_settings.vertical_speed_max, -1.0f, target.desired_vel.y);
+        }
+        if (target.vel.y > 0.0f) {
+            target.vel.y = target.desired_vel.y;
+        }
+        if (std::fabs(target.vel.y) <= 0.0001f && target.desired_vel.y < 0.0f) {
+            target.vel.y = target.desired_vel.y;
+        }
+    }
+    lock_disabled_wall_axes(game, target);
 }
 
 void update_wall_targets(Game& game, float dt) {
@@ -338,26 +385,34 @@ void update_wall_targets(Game& game, float dt) {
                 target.desired_vel = wall_desired_velocity(game);
                 target.change_timer = wall_change_timer(game);
             }
+            steer_wall_target_from_bounds(game, target);
             target.vel = approach_velocity(target.vel, target.desired_vel, target.acceleration, step_dt);
             lock_disabled_wall_axes(game, target);
             target.pos = target.pos + target.vel * step_dt;
-
-            float min_x, max_x, min_y, max_y;
-            wall_target_bounds(target, min_x, max_x, min_y, max_y);
-            if (target.pos.x < min_x || target.pos.x > max_x) {
-                target.pos.x = clampf(target.pos.x, min_x, max_x);
-                target.vel.x = -target.vel.x;
-                target.desired_vel.x = -target.desired_vel.x;
-            }
-            if (target.pos.y < min_y || target.pos.y > max_y) {
-                target.pos.y = clampf(target.pos.y, min_y, max_y);
-                target.vel.y = -target.vel.y;
-                target.desired_vel.y = -target.desired_vel.y;
-            }
-            lock_disabled_wall_axes(game, target);
+            contain_wall_target(game, target);
         }
-        resolve_wall_target_collisions(game);
     }
+}
+
+static bool pill_needs_boundary_steer(const Game& game, const Target& target) {
+    Vec3 radial{target.pos.x, 0.0f, target.pos.z};
+    float dist = length(radial);
+    if (dist <= 0.001f) {
+        return false;
+    }
+    float min_dist = tracking_to_units(game.pill_settings.distance_min);
+    float max_dist = tracking_to_units(game.pill_settings.distance_max);
+    Vec3 outward = radial / dist;
+    float radial_desired = dot(target.desired_vel, outward);
+    float inner_guard = min_dist * 1.05f;
+    float outer_guard = max_dist * 0.95f;
+    if (inner_guard >= outer_guard) {
+        float midpoint = (min_dist + max_dist) * 0.5f;
+        return (dist > midpoint + 0.001f && radial_desired > 0.0f) ||
+            (dist < midpoint - 0.001f && radial_desired < 0.0f);
+    }
+    return (dist >= outer_guard && radial_desired > 0.0f) ||
+        (dist <= inner_guard && radial_desired < 0.0f);
 }
 
 void update_pill_target(Game& game, float dt) {
@@ -375,7 +430,7 @@ void update_pill_target(Game& game, float dt) {
     float min_dist = tracking_to_units(game.pill_settings.distance_min);
     float max_dist = tracking_to_units(game.pill_settings.distance_max);
     Vec3 previous_radial = radial;
-    if (dist > 0.001f && (dist <= min_dist * 1.03f || dist >= max_dist * 0.97f)) {
+    if (pill_needs_boundary_steer(game, target)) {
         target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
     }
     target.vel = approach_velocity(target.vel, target.desired_vel, tracking_to_units(game.pill_settings.acceleration), dt);
@@ -391,6 +446,9 @@ void update_pill_target(Game& game, float dt) {
             target.vel = target.vel - outward * radial_speed;
         }
         target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
+        if (game.pill_settings.speed > 0.0f && length(target.vel) <= 0.0001f) {
+            target.vel = target.desired_vel;
+        }
     } else if (dist > 0.001f && dist < min_dist) {
         float previous_dist = length(previous_radial);
         Vec3 outward = previous_dist > 0.001f ? previous_radial / previous_dist : radial / dist;
@@ -401,17 +459,35 @@ void update_pill_target(Game& game, float dt) {
             target.vel = target.vel - outward * radial_speed;
         }
         target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
+        if (game.pill_settings.speed > 0.0f && length(target.vel) <= 0.0001f) {
+            target.vel = target.desired_vel;
+        }
     }
     float limit = tracking_room_half_size(game.pill_settings) - tracking_to_units(1.0f) - target.radius;
-    if (std::fabs(target.pos.x) > limit) {
-        target.pos.x = clampf(target.pos.x, -limit, limit);
-        target.vel.x = -target.vel.x;
-        target.desired_vel.x = -target.desired_vel.x;
+    bool hit_room_limit = false;
+    if (target.pos.x < -limit) {
+        target.pos.x = -limit;
+        if (target.vel.x < 0.0f) target.vel.x = 0.0f;
+        hit_room_limit = true;
+    } else if (target.pos.x > limit) {
+        target.pos.x = limit;
+        if (target.vel.x > 0.0f) target.vel.x = 0.0f;
+        hit_room_limit = true;
     }
-    if (std::fabs(target.pos.z) > limit) {
-        target.pos.z = clampf(target.pos.z, -limit, limit);
-        target.vel.z = -target.vel.z;
-        target.desired_vel.z = -target.desired_vel.z;
+    if (target.pos.z < -limit) {
+        target.pos.z = -limit;
+        if (target.vel.z < 0.0f) target.vel.z = 0.0f;
+        hit_room_limit = true;
+    } else if (target.pos.z > limit) {
+        target.pos.z = limit;
+        if (target.vel.z > 0.0f) target.vel.z = 0.0f;
+        hit_room_limit = true;
+    }
+    if (hit_room_limit) {
+        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
+        if (game.pill_settings.speed > 0.0f && length(target.vel) <= 0.0001f) {
+            target.vel = target.desired_vel;
+        }
     }
 }
 

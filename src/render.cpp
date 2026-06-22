@@ -119,25 +119,30 @@ static void look_at(Vec3 eye, Vec3 center, Vec3 up) {
 }
 
 static void draw_wall_room(const Game& game) {
+    constexpr float WALL_VISUAL_SCALE = 1.10f;
     float wall_distance = game.wall_settings.wall_distance_max;  // back wall at the farthest configured distance
     float wall_z = wall_z_from_distance(wall_distance);
     float back_z = wall_back_z_for_distance(wall_distance);
-    float width = wall_width_for_distance(wall_distance);
-    float height = wall_height_for_distance(wall_distance);
+    float width = wall_width_for_distance(wall_distance) * WALL_VISUAL_SCALE;
+    float gameplay_height = wall_height_for_distance(wall_distance);
+    float height = gameplay_height * WALL_VISUAL_SCALE;
+    float center_y = gameplay_height * 0.5f;
+    float bottom_y = center_y - height * 0.5f;
+    float top_y = center_y + height * 0.5f;
     room_color(game.wall_color, 1.00f);
-    draw_box({0.0f, height * 0.5f, wall_z}, {width, height, 0.18f});
+    draw_box({0.0f, center_y, wall_z}, {width, height, 0.18f});
     room_color(game.wall_color, 0.87f);
-    draw_box({0.0f, -0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
+    draw_box({0.0f, bottom_y - 0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
     room_color(game.wall_color, 0.83f);
-    draw_box({0.0f, height + 0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
+    draw_box({0.0f, top_y + 0.05f, (wall_z + back_z) * 0.5f}, {width, 0.1f, back_z - wall_z});
     room_color(game.wall_color, 0.77f);
-    draw_box({-width * 0.5f, height * 0.5f, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
-    draw_box({width * 0.5f, height * 0.5f, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
+    draw_box({-width * 0.5f, center_y, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
+    draw_box({width * 0.5f, center_y, (wall_z + back_z) * 0.5f}, {0.15f, height, back_z - wall_z});
     room_color(game.wall_color, 0.68f);
-    draw_box({0.0f, height * 0.5f, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
-    draw_box({0.0f, 0.0f, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
-    draw_box({-width * 0.5f, height * 0.5f, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
-    draw_box({width * 0.5f, height * 0.5f, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
+    draw_box({0.0f, top_y, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
+    draw_box({0.0f, bottom_y, wall_z + 0.03f}, {width + 0.25f, 0.18f, 0.08f});
+    draw_box({-width * 0.5f, center_y, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
+    draw_box({width * 0.5f, center_y, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
 }
 
 static void draw_plane360(const Game& game) {
