@@ -107,92 +107,8 @@ Target spawn_wall_target(Game& game, int skip_index) {
     }
     Vec3 desired = wall_desired_velocity(game);
     float acceleration = wall_to_units(rand_wall_range(game, game.wall_settings.acceleration_min, game.wall_settings.acceleration_max));
-    return {pos, desired, desired, wall_change_timer(game), radius, acceleration, distance};
-}
-
-static Vec3 pill_desired_velocity(Game& game) {
-    float angle = rand_range(game, 0.0f, static_cast<float>(M_PI) * 2.0f);
-    float speed = tracking_to_units(game.pill_settings.speed);
-    return {std::cos(angle) * speed, 0.0f, std::sin(angle) * speed};
-}
-
-Vec3 pill_desired_velocity_for_position(Game& game, Vec3 pos) {
-    float speed = tracking_to_units(game.pill_settings.speed);
-    Vec3 radial{pos.x, 0.0f, pos.z};
-    float dist = length(radial);
-    float min_dist = tracking_to_units(game.pill_settings.distance_min);
-    float max_dist = tracking_to_units(game.pill_settings.distance_max);
-    if (dist > 0.001f) {
-        Vec3 outward = radial / dist;
-        float tangent_mix = rand_range(game, -0.45f, 0.45f);
-        Vec3 tangent{-outward.z, 0.0f, outward.x};
-        float inner_guard = min_dist * 1.05f;
-        float outer_guard = max_dist * 0.95f;
-        if (inner_guard >= outer_guard) {
-            float midpoint = (min_dist + max_dist) * 0.5f;
-            if (dist > midpoint + 0.001f) {
-                return normalize(outward * -1.0f + tangent * tangent_mix) * speed;
-            }
-            if (dist < midpoint - 0.001f) {
-                return normalize(outward + tangent * tangent_mix) * speed;
-            }
-            return tangent * random_sign(game) * speed;
-        }
-        if (dist >= outer_guard) {
-            return normalize(outward * -1.0f + tangent * tangent_mix) * speed;
-        }
-        if (dist <= inner_guard) {
-            return normalize(outward + tangent * tangent_mix) * speed;
-        }
-    }
-    return pill_desired_velocity(game);
-}
-
-Target spawn_pill_target(Game& game) {
-    float radius = tracking_to_units(game.pill_settings.width) * 0.5f;
-    float angle = -static_cast<float>(M_PI) * 0.5f + rand_range(game, -0.35f, 0.35f);
-    float dist = tracking_to_units(rand_range(game, game.pill_settings.distance_min, game.pill_settings.distance_max));
-    Vec3 desired = pill_desired_velocity_for_position(game, {std::cos(angle) * dist, PLANE_EYE_HEIGHT, std::sin(angle) * dist});
-    return {
-        {std::cos(angle) * dist, PLANE_EYE_HEIGHT, std::sin(angle) * dist},
-        desired,
-        desired,
-        rand_range(game, game.pill_settings.change_min, game.pill_settings.change_max),
-        radius,
-    };
-}
-
-static float closest_distance_to_segment(Vec3 point, Vec3 a, Vec3 b) {
-    Vec3 ab = b - a;
-    float denom = dot(ab, ab);
-    if (denom <= 0.00001f) {
-        return length(point - a);
-    }
-    float t = clampf(dot(point - a, ab) / denom, 0.0f, 1.0f);
-    return length(point - (a + ab * t));
-}
-
-static bool ray_hits_capsule(Vec3 origin, Vec3 dir, const Target& target, float* projected_out) {
-    Vec3 top = target.pos;
-    Vec3 bottom = target.pos - Vec3{0.0f, TRACKING_CAPSULE_HEIGHT, 0.0f};
-    float max_projection = std::max(0.0f, dot(top - origin, dir) + target.radius);
-    int steps = 96;
-    float best_distance = 1.0e9f;
-    float best_projection = 0.0f;
-    for (int i = 0; i <= steps; ++i) {
-        float projected = max_projection * static_cast<float>(i) / static_cast<float>(steps);
-        Vec3 point = origin + dir * projected;
-        float distance = closest_distance_to_segment(point, bottom, top);
-        if (distance < best_distance) {
-            best_distance = distance;
-            best_projection = projected;
-        }
-    }
-    if (best_distance <= target.radius) {
-        *projected_out = best_projection;
-        return true;
-    }
-    return false;
+    int health = game.wall_settings.target_health;
+    return {pos, desired, desired, wall_change_timer(game), radius, acceleration, distance, health};
 }
 
 void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
@@ -200,6 +116,8 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     game.mode = AppMode::Playing;
     game.active_field = FieldId::None;
     game.scenario = scenario;
+    game.scenario.kind = is_tracking(game.wall_settings.task_mode) ? ScenarioKind::Tracking : ScenarioKind::WallClick;
+    game.scenario.title = is_tracking(game.scenario.kind) ? "WALL TRACKING" : "WALL CLICKING";
     game.run_mode = mode;
     game.challenge_time_left = mode == RunMode::Challenge ? CHALLENGE_DURATION_SEC : 0.0f;
     game.fire_accumulator = 0.0f;
@@ -208,15 +126,9 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     game.stats = {};
     game.yaw = 0.0f;
     game.pitch = 0.0f;
-    int count = scenario.kind == ScenarioKind::WallClick
-        ? rand_wall_int_range(game, game.wall_settings.target_count_min, game.wall_settings.target_count_max)
-        : 1;
+    int count = rand_wall_int_range(game, game.wall_settings.target_count_min, game.wall_settings.target_count_max);
     for (int i = 0; i < count; ++i) {
-        if (scenario.kind == ScenarioKind::WallClick) {
-            game.targets.push_back(spawn_wall_target(game));
-        } else {
-            game.targets.push_back(spawn_pill_target(game));
-        }
+        game.targets.push_back(spawn_wall_target(game));
     }
 }
 
@@ -227,25 +139,31 @@ static int aimed_target(const Game& game) {
     float best_projected = 1.0e9f;
     for (int i = 0; i < static_cast<int>(game.targets.size()); ++i) {
         const Target& target = game.targets[i];
-        float projected = 0.0f;
-        bool hit = false;
-        if (is_tracking(game.scenario.kind)) {
-            hit = ray_hits_capsule(origin, dir, target, &projected);
-        } else {
-            Vec3 to_target = target.pos - origin;
-            projected = dot(to_target, dir);
-            if (projected < 0.0f) {
-                continue;
-            }
-            Vec3 closest = origin + dir * projected;
-            hit = length(closest - target.pos) <= target.radius;
+        Vec3 to_target = target.pos - origin;
+        float projected = dot(to_target, dir);
+        if (projected < 0.0f) {
+            continue;
         }
-        if (hit && projected < best_projected) {
+        Vec3 closest = origin + dir * projected;
+        if (length(closest - target.pos) <= target.radius && projected < best_projected) {
             best = i;
             best_projected = projected;
         }
     }
     return best;
+}
+
+static void apply_target_damage(Game& game, int hit_index) {
+    if (hit_index < 0) {
+        return;
+    }
+    if (game.wall_settings.target_health <= 0) {
+        return;
+    }
+    game.targets[hit_index].health -= 1;
+    if (game.targets[hit_index].health <= 0) {
+        game.targets[hit_index] = spawn_wall_target(game, hit_index);
+    }
 }
 
 static Vec3 approach_velocity(Vec3 current, Vec3 desired, float accel, float dt) {
@@ -394,108 +312,11 @@ void update_wall_targets(Game& game, float dt) {
     }
 }
 
-static bool pill_needs_boundary_steer(const Game& game, const Target& target) {
-    Vec3 radial{target.pos.x, 0.0f, target.pos.z};
-    float dist = length(radial);
-    if (dist <= 0.001f) {
-        return false;
-    }
-    float min_dist = tracking_to_units(game.pill_settings.distance_min);
-    float max_dist = tracking_to_units(game.pill_settings.distance_max);
-    Vec3 outward = radial / dist;
-    float radial_desired = dot(target.desired_vel, outward);
-    float inner_guard = min_dist * 1.05f;
-    float outer_guard = max_dist * 0.95f;
-    if (inner_guard >= outer_guard) {
-        float midpoint = (min_dist + max_dist) * 0.5f;
-        return (dist > midpoint + 0.001f && radial_desired > 0.0f) ||
-            (dist < midpoint - 0.001f && radial_desired < 0.0f);
-    }
-    return (dist >= outer_guard && radial_desired > 0.0f) ||
-        (dist <= inner_guard && radial_desired < 0.0f);
-}
-
-void update_pill_target(Game& game, float dt) {
-    if (game.targets.empty()) {
-        return;
-    }
-    Target& target = game.targets[0];
-    target.change_timer -= dt;
-    if (target.change_timer <= 0.0f) {
-        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
-        target.change_timer = rand_range(game, game.pill_settings.change_min, game.pill_settings.change_max);
-    }
-    Vec3 radial{target.pos.x, 0.0f, target.pos.z};
-    float dist = length(radial);
-    float min_dist = tracking_to_units(game.pill_settings.distance_min);
-    float max_dist = tracking_to_units(game.pill_settings.distance_max);
-    Vec3 previous_radial = radial;
-    if (pill_needs_boundary_steer(game, target)) {
-        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
-    }
-    target.vel = approach_velocity(target.vel, target.desired_vel, tracking_to_units(game.pill_settings.acceleration), dt);
-    target.pos = target.pos + target.vel * dt;
-    radial = {target.pos.x, 0.0f, target.pos.z};
-    dist = length(radial);
-    if (dist > 0.001f && dist > max_dist) {
-        Vec3 outward = radial / dist;
-        target.pos.x = outward.x * max_dist;
-        target.pos.z = outward.z * max_dist;
-        float radial_speed = dot(target.vel, outward);
-        if (radial_speed > 0.0f) {
-            target.vel = target.vel - outward * radial_speed;
-        }
-        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
-        if (game.pill_settings.speed > 0.0f && length(target.vel) <= 0.0001f) {
-            target.vel = target.desired_vel;
-        }
-    } else if (dist > 0.001f && dist < min_dist) {
-        float previous_dist = length(previous_radial);
-        Vec3 outward = previous_dist > 0.001f ? previous_radial / previous_dist : radial / dist;
-        target.pos.x = outward.x * min_dist;
-        target.pos.z = outward.z * min_dist;
-        float radial_speed = dot(target.vel, outward);
-        if (radial_speed < 0.0f) {
-            target.vel = target.vel - outward * radial_speed;
-        }
-        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
-        if (game.pill_settings.speed > 0.0f && length(target.vel) <= 0.0001f) {
-            target.vel = target.desired_vel;
-        }
-    }
-    float limit = tracking_room_half_size(game.pill_settings) - tracking_to_units(1.0f) - target.radius;
-    bool hit_room_limit = false;
-    if (target.pos.x < -limit) {
-        target.pos.x = -limit;
-        if (target.vel.x < 0.0f) target.vel.x = 0.0f;
-        hit_room_limit = true;
-    } else if (target.pos.x > limit) {
-        target.pos.x = limit;
-        if (target.vel.x > 0.0f) target.vel.x = 0.0f;
-        hit_room_limit = true;
-    }
-    if (target.pos.z < -limit) {
-        target.pos.z = -limit;
-        if (target.vel.z < 0.0f) target.vel.z = 0.0f;
-        hit_room_limit = true;
-    } else if (target.pos.z > limit) {
-        target.pos.z = limit;
-        if (target.vel.z > 0.0f) target.vel.z = 0.0f;
-        hit_room_limit = true;
-    }
-    if (hit_room_limit) {
-        target.desired_vel = pill_desired_velocity_for_position(game, target.pos);
-        if (game.pill_settings.speed > 0.0f && length(target.vel) <= 0.0001f) {
-            target.vel = target.desired_vel;
-        }
-    }
-}
-
 // Records the finished challenge run, saves it, and shows the results screen.
 static void finalize_challenge(Game& game) {
     RunRecord run;
     run.kind = game.scenario.kind;
-    run.preset_name = game.scenario.kind == ScenarioKind::WallClick ? game.wall_preset_name : game.pill_preset_name;
+    run.preset_name = game.wall_preset_name;
     run.score = game.stats.hits;
     run.shots = game.stats.shots;
     run.accuracy = game.stats.shots > 0 ? static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f : 0.0f;
@@ -507,6 +328,20 @@ static void finalize_challenge(Game& game) {
     game.mode = AppMode::Results;
 }
 
+static void fire_tracking_shots(Game& game, int hit_index, float dt) {
+    game.fire_accumulator += dt;
+    float interval = 1.0f / TRACKING_FIRE_HZ;
+    while (game.fire_accumulator >= interval) {
+        game.fire_accumulator -= interval;
+        game.stats.shots += 1;
+        if (hit_index >= 0) {
+            game.stats.hits += 1;
+            game.pending_hit_sounds += 1;
+            apply_target_damage(game, hit_index);
+        }
+    }
+}
+
 void update_playing(Game& game, const Input& input, float dt) {
     float radians_per_count = deg_to_rad(YAW_DEG_PER_COUNT * game.sensitivity);
     game.yaw += static_cast<float>(input.rel_x) * radians_per_count;
@@ -516,40 +351,36 @@ void update_playing(Game& game, const Input& input, float dt) {
         game.challenge_time_left -= dt;
     }
 
-    if (game.scenario.kind == ScenarioKind::WallClick) {
-        update_wall_targets(game, dt);
-    } else {
-        update_pill_target(game, dt);
-    }
+    update_wall_targets(game, dt);
 
     int hit_index = aimed_target(game);
-    if (game.scenario.kind == ScenarioKind::WallClick) {
+    if (!is_tracking(game.scenario.kind)) {
         // Clicking always scores on manual shots (score = hits).
         if (input.left_pressed) {
             game.stats.shots += 1;
             if (hit_index >= 0) {
                 game.stats.hits += 1;
                 game.pending_hit_sounds += 1;
-                game.targets[hit_index] = spawn_wall_target(game, hit_index);
+                apply_target_damage(game, hit_index);
             }
         }
     } else if (game.run_mode == RunMode::Challenge) {
         // Tracking challenge: auto-fire at a fixed rate; each on-target tick is a hit.
+        fire_tracking_shots(game, hit_index, dt);
+    } else if (input.left_down) {
+        // Tracking practice: score by time-on-target while firing. Health ticks at the
+        // same fire rate, but practice does not auto-count shots.
+        game.stats.tracking_fire_time += dt;
+        if (hit_index >= 0) {
+            game.stats.tracking_on_time += dt;
+        }
         game.fire_accumulator += dt;
         float interval = 1.0f / TRACKING_FIRE_HZ;
         while (game.fire_accumulator >= interval) {
             game.fire_accumulator -= interval;
-            game.stats.shots += 1;
             if (hit_index >= 0) {
-                game.stats.hits += 1;
-                game.pending_hit_sounds += 1;
+                apply_target_damage(game, hit_index);
             }
-        }
-    } else if (input.left_down) {
-        // Tracking practice: score by time-on-target while firing.
-        game.stats.tracking_fire_time += dt;
-        if (hit_index >= 0) {
-            game.stats.tracking_on_time += dt;
         }
     }
 
@@ -561,7 +392,6 @@ void update_playing(Game& game, const Input& input, float dt) {
 void init_scenarios(Game& game) {
     game.scenarios = {
         {"WALL CLICKING", ScenarioKind::WallClick, MapKind::WallRoom, 0.0f, 0, 0.0f},
-        {"360 PILL TRACKING", ScenarioKind::PillTracking, MapKind::Plane360, 0.0f, 1, 0.0f},
     };
     game.scenario = game.scenarios.front();
 }

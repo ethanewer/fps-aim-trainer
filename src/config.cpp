@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -10,10 +11,28 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+#endif
+
 #include "world.hpp"
+
+#include "default_tasks.inc"
 
 std::string g_settings_path_override;
 std::string g_runs_path_override;
+std::string g_default_tasks_dump_override;
+std::string g_default_tasks_script_override;
+bool g_live_default_tasks = true;
 
 static void normalize_float_range(float& low, float& high, float min_allowed, float max_allowed) {
     low = clampf(low, min_allowed, max_allowed);
@@ -79,16 +98,11 @@ static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
     normalize_float_range(settings.vertical_speed_min, settings.vertical_speed_max, 0.0f, 8.0f);
     normalize_float_range(settings.acceleration_min, settings.acceleration_max, 0.0f, 40.0f);
     normalize_float_range(settings.change_min, settings.change_max, 0.0f, 12.0f);
+    settings.target_health = std::max(0, std::min(settings.target_health, WALL_TARGET_HEALTH_MAX));
+    if (settings.task_mode != TaskMode::Tracking) {
+        settings.task_mode = TaskMode::Clicking;
+    }
     (void)game;
-}
-
-static void normalize_pill_settings(PillTrackingSettings& settings) {
-    settings.width = clampf(settings.width, 0.20f, 2.50f);
-    normalize_float_range(settings.distance_min, settings.distance_max, 1.5f, 30.0f);
-    settings.speed = clampf(settings.speed, 0.0f, pill_speed_max_meters());
-    settings.acceleration = clampf(settings.acceleration, 0.0f, pill_acceleration_max_meters());
-    settings.change_min = clampf(settings.change_min, 0.05f, 8.0f);
-    settings.change_max = clampf(settings.change_max, settings.change_min, 12.0f);
 }
 
 static void normalize_crosshair(CrosshairSettings& settings) {
@@ -109,62 +123,50 @@ static void normalize_wall_color(WallColorSettings& settings) {
     settings.b = std::max(0, std::min(settings.b, 255));
 }
 
-static WallClickSettings make_wall_settings(
-    int target_count,
-    float radius,
-    float horizontal_speed_min,
-    float horizontal_speed_max,
-    float vertical_speed_min,
-    float vertical_speed_max,
-    float acceleration,
-    float change_min,
-    float change_max
-) {
+static WallClickSettings settings_from_def(const DefaultTaskDef& def) {
     WallClickSettings settings;
-    settings.target_count_min = target_count;
-    settings.target_count_max = target_count;
-    settings.wall_distance_min = 6.0f;
-    settings.wall_distance_max = 7.5f;
-    settings.radius_min = radius;
-    settings.radius_max = radius;
-    settings.horizontal_speed_min = horizontal_speed_min;
-    settings.horizontal_speed_max = horizontal_speed_max;
-    settings.vertical_speed_min = vertical_speed_min;
-    settings.vertical_speed_max = vertical_speed_max;
-    settings.acceleration_min = acceleration;
-    settings.acceleration_max = acceleration;
-    settings.change_min = change_min;
-    settings.change_max = change_max;
+    settings.task_mode = def.tracking ? TaskMode::Tracking : TaskMode::Clicking;
+    settings.target_health = def.health;
+    settings.target_count_min = def.targets_min;
+    settings.target_count_max = def.targets_max;
+    settings.wall_distance_min = def.wall_min;
+    settings.wall_distance_max = def.wall_max;
+    settings.radius_min = def.radius_min;
+    settings.radius_max = def.radius_max;
+    settings.horizontal_speed_min = def.h_speed_min;
+    settings.horizontal_speed_max = def.h_speed_max;
+    settings.vertical_speed_min = def.v_speed_min;
+    settings.vertical_speed_max = def.v_speed_max;
+    settings.acceleration_min = def.accel_min;
+    settings.acceleration_max = def.accel_max;
+    settings.change_min = def.change_min;
+    settings.change_max = def.change_max;
     return settings;
 }
 
-static std::vector<WallPreset> default_wall_presets() {
-    constexpr float normal = 0.08f;
-    constexpr float small = 0.04f;
-    constexpr float extra_small = 0.02f;
-    return {
-        {"1W3T DYNAMIC", make_wall_settings(3, normal, 1.0f, 1.5f, 0.0f, 0.75f, 5.0f, 0.75f, 1.5f)},
-        {"1W3TS DYNAMIC", make_wall_settings(3, small, 1.0f, 1.5f, 0.0f, 0.75f, 5.0f, 0.75f, 1.5f)},
-        {"1W6T STRAFE", make_wall_settings(6, normal, 0.75f, 1.25f, 0.0f, 0.0f, 4.0f, 1.0f, 2.5f)},
-        {"1W6TS STRAFE", make_wall_settings(6, small, 0.75f, 1.25f, 0.0f, 0.0f, 4.0f, 1.0f, 2.5f)},
-        {"1W6TES STRAFE", make_wall_settings(6, extra_small, 0.75f, 1.25f, 0.0f, 0.0f, 4.0f, 1.0f, 2.5f)},
-        {"1W2T STATIC", make_wall_settings(2, normal, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
-        {"1W4TS STATIC", make_wall_settings(4, small, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
-        {"1W8TES STATIC", make_wall_settings(8, extra_small, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
-        {"1W16T STATIC", make_wall_settings(16, normal, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)},
-    };
+static std::vector<WallPreset> compiled_default_wall_presets() {
+    std::vector<WallPreset> presets;
+    presets.reserve(sizeof(kDefaultTasks) / sizeof(kDefaultTasks[0]));
+    for (const DefaultTaskDef& def : kDefaultTasks) {
+        presets.push_back({def.name, settings_from_def(def)});
+    }
+    return presets;
 }
 
-static void migrate_builtin_wall_preset(WallPreset& preset) {
-    if (preset.name == "1W4T DYNAMIC") {
-        preset.name = "1W3T DYNAMIC";
-        preset.settings.target_count_min = 3;
-        preset.settings.target_count_max = 3;
-    } else if (preset.name == "1W4TS DYNAMIC") {
-        preset.name = "1W3TS DYNAMIC";
-        preset.settings.target_count_min = 3;
-        preset.settings.target_count_max = 3;
+static std::vector<WallPreset> g_runtime_defaults;
+static bool g_runtime_defaults_ready = false;
+
+static std::vector<WallPreset> load_reset_presets();
+
+static std::vector<WallPreset> default_wall_presets() {
+    if (!g_live_default_tasks) {
+        return compiled_default_wall_presets();
     }
+    if (!g_runtime_defaults_ready) {
+        g_runtime_defaults = load_reset_presets();
+        g_runtime_defaults_ready = true;
+    }
+    return g_runtime_defaults.empty() ? compiled_default_wall_presets() : g_runtime_defaults;
 }
 
 static int wall_preset_index(const std::vector<WallPreset>& presets, const std::string& name) {
@@ -181,10 +183,6 @@ static void ensure_wall_presets(Game& game) {
     if (game.wall_presets.empty()) {
         game.wall_presets = defaults;
         return;
-    }
-
-    for (WallPreset& preset : game.wall_presets) {
-        migrate_builtin_wall_preset(preset);
     }
 
     std::string selected_name;
@@ -219,7 +217,6 @@ static void ensure_wall_presets(Game& game) {
 
 void normalize_settings(Game& game) {
     normalize_wall_settings(game, game.wall_settings);
-    normalize_pill_settings(game.pill_settings);
     normalize_crosshair(game.crosshair);
     normalize_target_color(game.target_color);
     normalize_wall_color(game.wall_color);
@@ -227,42 +224,315 @@ void normalize_settings(Game& game) {
     for (WallPreset& preset : game.wall_presets) {
         preset.name = sanitize_preset_name(preset.name);
         if (preset.name == "MIGRATED CLICK") {
-            preset.name = "1W3T DYNAMIC";
+            preset.name = kDefaultTasks[0].name;
         }
         normalize_wall_settings(game, preset.settings);
-    }
-    for (PillPreset& preset : game.pill_presets) {
-        preset.name = sanitize_preset_name(preset.name);
-        if (preset.name == "MIGRATED PILL") {
-            preset.name = "SMOOTH PILL";
-        }
-        normalize_pill_settings(preset.settings);
     }
 }
 
 void ensure_presets(Game& game) {
     ensure_wall_presets(game);
-    if (game.pill_presets.empty()) {
-        game.pill_presets.push_back({"SMOOTH PILL", game.pill_settings});
-        PillTrackingSettings reactive = game.pill_settings;
-        reactive.change_min = 0.20f;
-        reactive.change_max = 1.20f;
-        reactive.acceleration = 24.0f;
-        game.pill_presets.push_back({"REACTIVE PILL", reactive});
-    }
     normalize_settings(game);
     game.selected_wall_preset = std::max(0, std::min(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()) - 1));
-    game.selected_pill_preset = std::max(0, std::min(game.selected_pill_preset, static_cast<int>(game.pill_presets.size()) - 1));
     game.wall_preset_scroll = std::max(0, std::min(game.wall_preset_scroll, std::max(0, static_cast<int>(game.wall_presets.size()) - 7)));
-    game.pill_preset_scroll = std::max(0, std::min(game.pill_preset_scroll, std::max(0, static_cast<int>(game.pill_presets.size()) - 7)));
 }
 
 void apply_selected_presets(Game& game) {
     ensure_presets(game);
     game.wall_settings = game.wall_presets[game.selected_wall_preset].settings;
     game.wall_preset_name = game.wall_presets[game.selected_wall_preset].name;
-    game.pill_settings = game.pill_presets[game.selected_pill_preset].settings;
-    game.pill_preset_name = game.pill_presets[game.selected_pill_preset].name;
+}
+
+static bool file_exists(const std::string& path) {
+    std::ifstream in(path);
+    return static_cast<bool>(in);
+}
+
+static std::string path_parent(const std::string& path) {
+    std::size_t slash = path.find_last_of("/\\");
+    if (slash == std::string::npos) {
+        return ".";
+    }
+    if (slash == 0) {
+        return path.substr(0, 1);
+    }
+    return path.substr(0, slash);
+}
+
+static std::string path_join(const std::string& dir, const std::string& name) {
+    if (dir.empty()) {
+        return name;
+    }
+    char last = dir.back();
+    if (last == '/' || last == '\\') {
+        return dir + name;
+    }
+    return dir + "/" + name;
+}
+
+static std::string executable_dir() {
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) {
+        return ".";
+    }
+    return path_parent(buf);
+#elif defined(__APPLE__)
+    char buf[4096];
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) != 0) {
+        return ".";
+    }
+    return path_parent(buf);
+#else
+    char buf[4096];
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) {
+        return ".";
+    }
+    buf[n] = 0;
+    return path_parent(buf);
+#endif
+}
+
+static std::string current_dir() {
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    DWORD n = GetCurrentDirectoryA(MAX_PATH, buf);
+    if (n == 0 || n >= MAX_PATH) {
+        return ".";
+    }
+    return buf;
+#else
+    char buf[4096];
+    if (getcwd(buf, sizeof(buf)) == nullptr) {
+        return ".";
+    }
+    return buf;
+#endif
+}
+
+static std::string find_default_tasks_script() {
+    if (!g_default_tasks_script_override.empty()) {
+        return g_default_tasks_script_override;
+    }
+    std::string dirs[] = {
+        executable_dir(),
+        path_parent(executable_dir()),
+        current_dir(),
+        path_parent(current_dir()),
+    };
+    for (const std::string& dir : dirs) {
+        std::string script = path_join(path_join(dir, "scripts"), "default-tasks.py");
+        if (file_exists(script)) {
+            return script;
+        }
+    }
+    return {};
+}
+
+#ifdef _WIN32
+static std::string run_process(const std::vector<std::string>& args) {
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    HANDLE read_out = nullptr;
+    HANDLE write_out = nullptr;
+    if (!CreatePipe(&read_out, &write_out, &sa, 0)) {
+        return {};
+    }
+    SetHandleInformation(read_out, HANDLE_FLAG_INHERIT, 0);
+    HANDLE nul = CreateFileA("NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, nullptr);
+
+    std::string cmdline;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) {
+            cmdline += ' ';
+        }
+        cmdline += '"';
+        for (char c : args[i]) {
+            if (c == '"') {
+                cmdline += '\\';
+            }
+            cmdline += c;
+        }
+        cmdline += '"';
+    }
+    std::vector<char> cmd(cmdline.begin(), cmdline.end());
+    cmd.push_back('\0');
+
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    si.hStdOutput = write_out;
+    si.hStdError = nul != INVALID_HANDLE_VALUE ? nul : write_out;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    PROCESS_INFORMATION pi{};
+    BOOL ok = CreateProcessA(nullptr, cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    CloseHandle(write_out);
+    if (nul != INVALID_HANDLE_VALUE) {
+        CloseHandle(nul);
+    }
+    std::string out;
+    if (ok) {
+        char buf[4096];
+        DWORD n = 0;
+        while (ReadFile(read_out, buf, sizeof(buf), &n, nullptr) && n > 0) {
+            out.append(buf, buf + n);
+        }
+        WaitForSingleObject(pi.hProcess, 20000);
+        DWORD code = 1;
+        GetExitCodeProcess(pi.hProcess, &code);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        if (code != 0) {
+            out.clear();
+        }
+    }
+    CloseHandle(read_out);
+    return out;
+}
+#else
+static std::string run_process(const std::vector<std::string>& args) {
+    std::string cmd;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) {
+            cmd += ' ';
+        }
+        cmd += '\'';
+        for (char c : args[i]) {
+            if (c == '\'') {
+                cmd += "'\\''";
+            } else {
+                cmd += c;
+            }
+        }
+        cmd += '\'';
+    }
+    cmd += " 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        return {};
+    }
+    std::string out;
+    char buf[4096];
+    while (fgets(buf, sizeof(buf), pipe) != nullptr) {
+        out += buf;
+    }
+    int status = pclose(pipe);
+    if (status != 0) {
+        return {};
+    }
+    return out;
+}
+#endif
+
+static std::string run_python_dump(const std::string& script) {
+    std::vector<std::vector<std::string>> commands = {
+        {"python", script, "--dump"},
+        {"python3", script, "--dump"},
+        {"py", "-3", script, "--dump"},
+    };
+    for (const std::vector<std::string>& args : commands) {
+        std::string out = run_process(args);
+        if (!out.empty()) {
+            return out;
+        }
+    }
+    return {};
+}
+
+static std::vector<WallPreset> parse_default_task_dump(const std::string& text) {
+    std::vector<WallPreset> presets;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        std::istringstream row(line);
+        std::string key;
+        row >> key;
+        if (key != "task") {
+            continue;
+        }
+        WallPreset preset;
+        if (!(row >> std::quoted(preset.name)) || preset.name.empty()) {
+            continue;
+        }
+        std::vector<float> values;
+        float value = 0.0f;
+        while (row >> value) {
+            values.push_back(value);
+        }
+        if (values.size() < 16) {
+            continue;
+        }
+        preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
+        preset.settings.target_count_max = static_cast<int>(std::round(values[1]));
+        preset.settings.wall_distance_min = values[2];
+        preset.settings.wall_distance_max = values[3];
+        preset.settings.radius_min = values[4];
+        preset.settings.radius_max = values[5];
+        preset.settings.horizontal_speed_min = values[6];
+        preset.settings.horizontal_speed_max = values[7];
+        preset.settings.vertical_speed_min = values[8];
+        preset.settings.vertical_speed_max = values[9];
+        preset.settings.acceleration_min = values[10];
+        preset.settings.acceleration_max = values[11];
+        preset.settings.change_min = values[12];
+        preset.settings.change_max = values[13];
+        preset.settings.task_mode = static_cast<int>(std::round(values[14])) == 1 ? TaskMode::Tracking : TaskMode::Clicking;
+        preset.settings.target_health = static_cast<int>(std::round(values[15]));
+        presets.push_back(preset);
+    }
+    return presets;
+}
+
+static std::vector<WallPreset> load_reset_presets() {
+    if (!g_default_tasks_dump_override.empty()) {
+        std::ifstream in(g_default_tasks_dump_override);
+        std::ostringstream text;
+        text << in.rdbuf();
+        std::vector<WallPreset> parsed = parse_default_task_dump(text.str());
+        if (!parsed.empty()) {
+            return parsed;
+        }
+    }
+    if (g_live_default_tasks) {
+        std::string script = find_default_tasks_script();
+        if (!script.empty()) {
+            std::vector<WallPreset> parsed = parse_default_task_dump(run_python_dump(script));
+            if (!parsed.empty()) {
+                return parsed;
+            }
+        }
+    }
+    return compiled_default_wall_presets();
+}
+
+void reset_wall_presets(Game& game) {
+    game.active_field = FieldId::None;
+    game.edit_draft.clear();
+    game.edit_fresh = false;
+    std::vector<WallPreset> loaded = load_reset_presets();
+    if (loaded.empty()) {
+        loaded = compiled_default_wall_presets();
+    }
+    g_runtime_defaults = loaded;
+    g_runtime_defaults_ready = true;
+    game.wall_presets = loaded;
+    game.selected_wall_preset = 0;
+    game.wall_preset_scroll = 0;
+    normalize_settings(game);
+    if (game.wall_presets.empty()) {
+        game.wall_presets = compiled_default_wall_presets();
+    }
+    game.selected_wall_preset = 0;
+    game.wall_settings = game.wall_presets.front().settings;
+    game.wall_preset_name = game.wall_presets.front().name;
 }
 
 void save_current_wall_preset(Game& game) {
@@ -273,17 +543,6 @@ void save_current_wall_preset(Game& game) {
         game.selected_wall_preset = static_cast<int>(game.wall_presets.size()) - 1;
     } else {
         game.wall_presets[game.selected_wall_preset] = {game.wall_preset_name, game.wall_settings};
-    }
-}
-
-void save_current_pill_preset(Game& game) {
-    normalize_settings(game);
-    game.pill_preset_name = unique_preset_name(game.pill_presets, game.pill_preset_name, game.selected_pill_preset);
-    if (game.selected_pill_preset < 0 || game.selected_pill_preset >= static_cast<int>(game.pill_presets.size())) {
-        game.pill_presets.push_back({game.pill_preset_name, game.pill_settings});
-        game.selected_pill_preset = static_cast<int>(game.pill_presets.size()) - 1;
-    } else {
-        game.pill_presets[game.selected_pill_preset] = {game.pill_preset_name, game.pill_settings};
     }
 }
 
@@ -308,19 +567,20 @@ std::string settings_path() {
 
 void save_settings(const Game& game) {
     Game normalized = game;
-    ensure_presets(normalized);
+    if (normalized.wall_presets.empty()) {
+        ensure_presets(normalized);
+    }
     normalize_settings(normalized);
     std::ofstream out(settings_path());
     if (!out) {
         return;
     }
-    out << "version 7\n";
+    out << "version 10\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
     out << "target_color " << normalized.target_color.r << " " << normalized.target_color.g << " " << normalized.target_color.b << "\n";
     out << "wall_color " << normalized.wall_color.r << " " << normalized.wall_color.g << " " << normalized.wall_color.b << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
-    out << "selected_pill " << normalized.selected_pill_preset << "\n";
     for (const WallPreset& preset : normalized.wall_presets) {
         out << "wall_preset " << std::quoted(preset.name) << " "
             << preset.settings.target_count_min << " "
@@ -336,17 +596,9 @@ void save_settings(const Game& game) {
             << preset.settings.acceleration_min << " "
             << preset.settings.acceleration_max << " "
             << preset.settings.change_min << " "
-            << preset.settings.change_max << "\n";
-    }
-    for (const PillPreset& preset : normalized.pill_presets) {
-        out << "pill_preset " << std::quoted(preset.name) << " "
-            << preset.settings.width << " "
-            << preset.settings.distance_min << " "
-            << preset.settings.distance_max << " "
-            << preset.settings.speed << " "
-            << preset.settings.acceleration << " "
-            << preset.settings.change_min << " "
-            << preset.settings.change_max << "\n";
+            << preset.settings.change_max << " "
+            << (preset.settings.task_mode == TaskMode::Tracking ? 1 : 0) << " "
+            << preset.settings.target_health << "\n";
     }
 }
 
@@ -381,7 +633,7 @@ void load_settings(Game& game) {
         } else if (key == "selected_wall") {
             row >> game.selected_wall_preset;
         } else if (key == "selected_pill") {
-            row >> game.selected_pill_preset;
+            continue;  // pill tracking was removed; ignore leftover keys
         } else if (key == "wall_preset") {
             WallPreset preset;
             row >> std::quoted(preset.name);
@@ -405,6 +657,10 @@ void load_settings(Game& game) {
                 preset.settings.acceleration_max = values[11];
                 preset.settings.change_min = values[12];
                 preset.settings.change_max = values[13];
+                if (values.size() >= 16) {
+                    preset.settings.task_mode = static_cast<int>(std::round(values[14])) == 1 ? TaskMode::Tracking : TaskMode::Clicking;
+                    preset.settings.target_health = static_cast<int>(std::round(values[15]));
+                }
             } else if (values.size() >= 13) {
                 // v4: a single wall distance -> migrate to a min==max range.
                 preset.settings.target_count_min = static_cast<int>(std::round(values[0]));
@@ -456,33 +712,7 @@ void load_settings(Game& game) {
                 game.wall_presets.push_back(preset);
             }
         } else if (key == "pill_preset") {
-            PillPreset preset;
-            row >> std::quoted(preset.name);
-            std::vector<float> values;
-            float value = 0.0f;
-            while (row >> value) {
-                values.push_back(value);
-            }
-            if (values.size() >= 7) {
-                preset.settings.width = values[0];
-                preset.settings.distance_min = values[1];
-                preset.settings.distance_max = values[2];
-                preset.settings.speed = values[3];
-                preset.settings.acceleration = values[4];
-                preset.settings.change_min = values[5];
-                preset.settings.change_max = values[6];
-            } else if (values.size() >= 5) {
-                preset.settings.width = units_to_tracking_meters(values[0]);
-                preset.settings.distance_min = units_to_tracking_meters(7.5f);
-                preset.settings.distance_max = units_to_tracking_meters(10.5f);
-                preset.settings.speed = units_to_tracking_meters(values[1]);
-                preset.settings.acceleration = units_to_tracking_meters(values[2]);
-                preset.settings.change_min = values[3];
-                preset.settings.change_max = values[4];
-            }
-            if (!preset.name.empty()) {
-                game.pill_presets.push_back(preset);
-            }
+            continue;  // pill tracking was removed; ignore leftover presets
         } else {
             float value = 0.0f;
             std::istringstream legacy(line);
@@ -500,20 +730,64 @@ void load_settings(Game& game) {
                 game.wall_settings.change_min = value <= 0.0f ? 0.0f : value * 0.55f;
                 game.wall_settings.change_max = value <= 0.0f ? 0.0f : value * 1.55f;
             }
-            else if (key == "pill_width") game.pill_settings.width = units_to_tracking_meters(value);
-            else if (key == "pill_dist_min") game.pill_settings.distance_min = value;
-            else if (key == "pill_dist_max") game.pill_settings.distance_max = value;
-            else if (key == "pill_speed") game.pill_settings.speed = units_to_tracking_meters(value);
-            else if (key == "pill_accel") game.pill_settings.acceleration = units_to_tracking_meters(value);
-            else if (key == "pill_change_min") game.pill_settings.change_min = value;
-            else if (key == "pill_change_max") game.pill_settings.change_max = value;
         }
     }
     if (game.wall_presets.empty()) {
-        game.wall_presets.push_back({"1W3T DYNAMIC", game.wall_settings});
+        game.wall_presets.push_back({kDefaultTasks[0].name, game.wall_settings});
     }
-    if (game.pill_presets.empty()) {
-        game.pill_presets.push_back({"SMOOTH PILL", game.pill_settings});
+    // v8 stored unused health 0 on clicking presets. Health 0 now means infinite
+    // for both modes, so one-shot clicking must migrate to 1.
+    if (settings_version < 9) {
+        auto migrate_clicking_health = [](WallClickSettings& settings) {
+            if (settings.task_mode != TaskMode::Tracking && settings.target_health == 0) {
+                settings.target_health = 1;
+            }
+        };
+        migrate_clicking_health(game.wall_settings);
+        for (WallPreset& preset : game.wall_presets) {
+            migrate_clicking_health(preset.settings);
+        }
+    }
+    // v10: built-in tasks use an 8-10m wall range.
+    if (settings_version < 10) {
+        auto migrate_builtin_wall = [](const std::string& name, WallClickSettings& settings) {
+            for (const DefaultTaskDef& def : kDefaultTasks) {
+                if (name == def.name) {
+                    settings.wall_distance_min = def.wall_min;
+                    settings.wall_distance_max = def.wall_max;
+                    return;
+                }
+            }
+            static const char* kLegacyMid[] = {
+                "1W4T DYNAMIC",
+                "1W4TS DYNAMIC",
+                "1W4T STRAFE",
+                "1W4TS STRAFE",
+                "1W4TES STRAFE",
+                "1W4T STATIC",
+                "1W4TES STATIC",
+                "1W3T DYNAMIC",
+                "1W3TS DYNAMIC",
+                "1W6T STRAFE",
+                "1W6TS STRAFE",
+                "1W6TES STRAFE",
+                "1W2T STATIC",
+                "1W4TS STATIC",
+                "1W8TES STATIC",
+                "1W16T STATIC",
+            };
+            for (const char* legacy : kLegacyMid) {
+                if (name == legacy) {
+                    settings.wall_distance_min = 8.0f;
+                    settings.wall_distance_max = 10.0f;
+                    return;
+                }
+            }
+        };
+        migrate_builtin_wall(game.wall_preset_name, game.wall_settings);
+        for (WallPreset& preset : game.wall_presets) {
+            migrate_builtin_wall(preset.name, preset.settings);
+        }
     }
     apply_selected_presets(game);
 }
@@ -574,7 +848,7 @@ void load_runs(Game& game) {
         int kind = 0;
         RunRecord run;
         if (row >> kind >> run.score >> run.shots >> run.accuracy >> run.duration >> run.timestamp >> std::quoted(run.preset_name)) {
-            run.kind = kind == static_cast<int>(ScenarioKind::PillTracking) ? ScenarioKind::PillTracking : ScenarioKind::WallClick;
+            run.kind = kind == static_cast<int>(ScenarioKind::Tracking) ? ScenarioKind::Tracking : ScenarioKind::WallClick;
             game.runs.push_back(run);
         }
     }

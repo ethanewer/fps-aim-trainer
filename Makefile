@@ -32,7 +32,7 @@ endif
 CXXFLAGS += -MMD -MP
 BIN := $(BUILD_DIR)/$(BIN_NAME)$(EXE_EXT)
 
-.PHONY: all clean app app-dev app-stable run install-app-bundle
+.PHONY: all clean app app-dev app-stable run install-app-bundle default-tasks
 
 all: $(BIN)
 
@@ -86,3 +86,6 @@ install-app-bundle:
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+default-tasks:
+	python scripts/default-tasks.py || python3 scripts/default-tasks.py

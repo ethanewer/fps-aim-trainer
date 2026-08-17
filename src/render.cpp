@@ -45,23 +45,6 @@ static void draw_box(Vec3 c, Vec3 s) {
     glEnd();
 }
 
-static void vertex_color(uint8_t r, uint8_t g, uint8_t b) {
-    color(r, g, b);
-}
-
-static void draw_quad_gradient(Vec3 a, Vec3 b, Vec3 c, Vec3 d, std::array<std::array<uint8_t, 3>, 4> colors) {
-    glBegin(GL_QUADS);
-    vertex_color(colors[0][0], colors[0][1], colors[0][2]);
-    glVertex3f(a.x, a.y, a.z);
-    vertex_color(colors[1][0], colors[1][1], colors[1][2]);
-    glVertex3f(b.x, b.y, b.z);
-    vertex_color(colors[2][0], colors[2][1], colors[2][2]);
-    glVertex3f(c.x, c.y, c.z);
-    vertex_color(colors[3][0], colors[3][1], colors[3][2]);
-    glVertex3f(d.x, d.y, d.z);
-    glEnd();
-}
-
 static void draw_lit_sphere(Vec3 c, float radius) {
     constexpr int stacks = 24;
     constexpr int slices = 36;
@@ -81,22 +64,6 @@ static void draw_lit_sphere(Vec3 c, float radius) {
         }
         glEnd();
     }
-}
-
-static void draw_lit_cylinder_y(Vec3 top, float radius, float height) {
-    constexpr int slices = 36;
-    float y0 = top.y - height;
-    float y1 = top.y;
-    glBegin(GL_QUAD_STRIP);
-    for (int j = 0; j <= slices; ++j) {
-        float lng = static_cast<float>(M_PI) * 2.0f * static_cast<float>(j) / slices;
-        float x = std::cos(lng);
-        float z = std::sin(lng);
-        glNormal3f(x, 0.0f, z);
-        glVertex3f(top.x + radius * x, y0, top.z + radius * z);
-        glVertex3f(top.x + radius * x, y1, top.z + radius * z);
-    }
-    glEnd();
 }
 
 static void perspective(float vertical_fov_deg, float aspect, float near_z, float far_z) {
@@ -145,37 +112,6 @@ static void draw_wall_room(const Game& game) {
     draw_box({width * 0.5f, center_y, wall_z + 0.03f}, {0.18f, height + 0.25f, 0.08f});
 }
 
-static void draw_plane360(const Game& game) {
-    float h = tracking_room_half_size(game.pill_settings);
-    float y0 = 0.0f;
-    float y1 = tracking_room_height(game.pill_settings);
-
-    draw_quad_gradient(
-        {-h, y0, -h}, {h, y0, -h}, {h, y0, h}, {-h, y0, h},
-        {{{68, 76, 85}, {74, 82, 91}, {64, 72, 81}, {58, 66, 75}}}
-    );
-    draw_quad_gradient(
-        {-h, y1, h}, {h, y1, h}, {h, y1, -h}, {-h, y1, -h},
-        {{{112, 120, 128}, {121, 129, 137}, {108, 116, 124}, {102, 110, 118}}}
-    );
-    draw_quad_gradient(
-        {-h, y0, -h}, {-h, y1, -h}, {h, y1, -h}, {h, y0, -h},
-        {{{76, 85, 94}, {86, 95, 104}, {96, 104, 112}, {86, 95, 104}}}
-    );
-    draw_quad_gradient(
-        {h, y0, h}, {h, y1, h}, {-h, y1, h}, {-h, y0, h},
-        {{{55, 64, 73}, {72, 81, 90}, {64, 73, 82}, {50, 59, 68}}}
-    );
-    draw_quad_gradient(
-        {-h, y0, h}, {-h, y1, h}, {-h, y1, -h}, {-h, y0, -h},
-        {{{49, 58, 67}, {66, 75, 84}, {78, 87, 96}, {58, 67, 76}}}
-    );
-    draw_quad_gradient(
-        {h, y0, -h}, {h, y1, -h}, {h, y1, h}, {h, y0, h},
-        {{{79, 88, 97}, {96, 104, 112}, {86, 95, 103}, {67, 76, 85}}}
-    );
-}
-
 static void set_target_material(const TargetColorSettings& target_color) {
     float r = static_cast<float>(target_color.r) / 255.0f;
     float g = static_cast<float>(target_color.g) / 255.0f;
@@ -189,14 +125,8 @@ static void set_target_material(const TargetColorSettings& target_color) {
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 14.0f);
 }
 
-static void draw_target(const Target& target, ScenarioKind kind, const TargetColorSettings& target_color) {
+static void draw_target(const Target& target, const TargetColorSettings& target_color) {
     set_target_material(target_color);
-    if (is_tracking(kind)) {
-        draw_lit_cylinder_y(target.pos, target.radius, TRACKING_CAPSULE_HEIGHT);
-        draw_lit_sphere(target.pos, target.radius);
-        draw_lit_sphere(target.pos - Vec3{0.0f, TRACKING_CAPSULE_HEIGHT, 0.0f}, target.radius);
-        return;
-    }
     draw_lit_sphere(target.pos, target.radius);
 }
 
@@ -367,23 +297,18 @@ bool list_button(const Input& input, float x, float y, float w, float h, const s
 }
 
 void draw_world(const Game& game, int w, int h) {
-    if (game.scenario.map == MapKind::Plane360) {
-        glClearColor(76.0f / 255.0f, 83.0f / 255.0f, 92.0f / 255.0f, 1.0f);
-    } else {
-        glClearColor(
-            static_cast<float>(shade_channel(game.wall_color.r, 0.70f)) / 255.0f,
-            static_cast<float>(shade_channel(game.wall_color.g, 0.70f)) / 255.0f,
-            static_cast<float>(shade_channel(game.wall_color.b, 0.70f)) / 255.0f,
-            1.0f
-        );
-    }
+    glClearColor(
+        static_cast<float>(shade_channel(game.wall_color.r, 0.70f)) / 255.0f,
+        static_cast<float>(shade_channel(game.wall_color.g, 0.70f)) / 255.0f,
+        static_cast<float>(shade_channel(game.wall_color.b, 0.70f)) / 255.0f,
+        1.0f
+    );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     begin_3d(game, w, h);
-    if (game.scenario.map == MapKind::WallRoom) draw_wall_room(game);
-    else draw_plane360(game);
+    draw_wall_room(game);
     GLfloat light_ambient[] = {0.82f, 0.82f, 0.84f, 1.0f};
     GLfloat light_diffuse[] = {0.70f, 0.70f, 0.68f, 1.0f};
-    GLfloat light_pos[] = {-4.0f, game.scenario.map == MapKind::WallRoom ? wall_height_for_distance(game.wall_settings.wall_distance_max) + 1.5f : tracking_room_height(game.pill_settings) + 3.0f, 1.0f, 1.0f};
+    GLfloat light_pos[] = {-4.0f, wall_height_for_distance(game.wall_settings.wall_distance_max) + 1.5f, 1.0f, 1.0f};
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, light_ambient);
@@ -391,7 +316,7 @@ void draw_world(const Game& game, int w, int h) {
     glLightfv(GL_LIGHT0, GL_SPECULAR, light_diffuse);
     glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
     for (const Target& target : game.targets) {
-        draw_target(target, game.scenario.kind, game.target_color);
+        draw_target(target, game.target_color);
     }
     glDisable(GL_LIGHTING);
     begin_2d(w, h);
@@ -419,7 +344,7 @@ void draw_world(const Game& game, int w, int h) {
         float remaining = game.challenge_time_left < 0.0f ? 0.0f : game.challenge_time_left;
         std::snprintf(line, sizeof(line), "CHALLENGE  TIME %.1f", remaining);
         timer_line = line;
-    } else if (game.scenario.kind == ScenarioKind::WallClick) {
+    } else if (!is_tracking(game.scenario.kind)) {
         float accuracy = game.stats.shots == 0 ? 100.0f : static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f;
         std::snprintf(line, sizeof(line), "HITS %d  SHOTS %d  ACC %.1f%%", game.stats.hits, game.stats.shots, accuracy);
         stat_line = line;

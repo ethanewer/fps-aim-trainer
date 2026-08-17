@@ -1,0 +1,139 @@
+{
+  "tasks": [
+    {
+      "name": "1W2T DYNAMIC",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W2TS DYNAMIC",
+      "size": "small",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W2T STRAFE",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W2TS STRAFE",
+      "size": "small",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W2T STATIC",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W2TS STATIC",
+      "size": "small",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W2TES STATIC",
+      "size": "extra_small",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4T DYNAMIC CLOSE",
+      "size": "normal",
+      "wall": "close",
+      "targets": 4,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4TS DYNAMIC CLOSE",
+      "size": "small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4T STRAFE CLOSE",
+      "size": "normal",
+      "wall": "close",
+      "targets": 4,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4TS STRAFE CLOSE",
+      "size": "small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4TES STRAFE CLOSE",
+      "size": "extra_small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4T STATIC CLOSE",
+      "size": "normal",
+      "wall": "close",
+      "targets": 4,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4TS STATIC CLOSE",
+      "size": "small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W4TES STATIC CLOSE",
+      "size": "extra_small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    }
+  ]
+}

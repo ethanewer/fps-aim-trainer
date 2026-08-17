@@ -14,30 +14,29 @@ inline constexpr float ROOM_BACK_Z = 8.0f;
 inline constexpr float ROOM_WIDTH = 28.0f;
 inline constexpr float ROOM_HEIGHT = 15.75f;
 inline constexpr float ROOM_EYE_HEIGHT = ROOM_HEIGHT * 0.5f;
-inline constexpr float PLANE_EYE_HEIGHT = 2.2f;
-inline constexpr float TRACKING_CAPSULE_HEIGHT = 1.35f;
-inline constexpr float PLANE_WALL_HEIGHT = 6.8f;
 inline constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
-inline constexpr float TRACKING_ROOM_SIDE_SCALE = 2.5f;
 inline constexpr float WALL_TARGET_RADIUS_MIN_M = 0.01f;
 inline constexpr float WALL_TARGET_RADIUS_MAX_M = 0.45f;
+inline constexpr int WALL_TARGET_HEALTH_MAX = 999;
 // Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
 // a fixed rate so tracking quality becomes a discrete hit count.
 inline constexpr float CHALLENGE_DURATION_SEC = 60.0f;
 inline constexpr float TRACKING_FIRE_HZ = 20.0f;
 
 enum class AppMode { Menu, Playing, Results };
-enum class ScenarioKind { WallClick, PillTracking };
-enum class MapKind { WallRoom, Plane360 };
-enum class MenuTab { Clicking, Tracking, General };
+enum class ScenarioKind { WallClick, Tracking };
+enum class TaskMode { Clicking, Tracking };
+enum class MapKind { WallRoom };
+enum class MenuTab { Clicking, General };
 enum class RunMode { Practice, Challenge };
 
 // Every editable text box in the menu has a stable id. `None` means nothing is
 // being edited. The order within each tab is also the TAB-key navigation order.
 enum class FieldId {
     None,
-    // Clicking tab
+    // Tasks tab
     WallName,
+    WallHealth,
     WallDistMin,
     WallDistMax,
     WallTargetsMin,
@@ -52,15 +51,6 @@ enum class FieldId {
     WallAccelMax,
     WallDirMin,
     WallDirMax,
-    // Tracking tab
-    PillName,
-    PillWidth,
-    PillDistMin,
-    PillDistMax,
-    PillSpeed,
-    PillAccel,
-    PillDirMin,
-    PillDirMax,
     // General tab
     GenSens,
     GenLength,
@@ -75,34 +65,30 @@ enum class FieldId {
 };
 
 inline bool is_tracking(ScenarioKind kind) {
-    return kind == ScenarioKind::PillTracking;
+    return kind == ScenarioKind::Tracking;
+}
+
+inline bool is_tracking(TaskMode mode) {
+    return mode == TaskMode::Tracking;
 }
 
 struct WallClickSettings {
+    TaskMode task_mode = TaskMode::Clicking;
+    int target_health = 1;  // 0 = infinite; 1 = one shot; N = N hits to kill
     int target_count_min = 3;
     int target_count_max = 3;
-    float wall_distance_min = 6.0f;
-    float wall_distance_max = 7.5f;
+    float wall_distance_min = 8.0f;
+    float wall_distance_max = 10.0f;
     float radius_min = 0.08f;
     float radius_max = 0.08f;
     float horizontal_speed_min = 1.0f;
     float horizontal_speed_max = 1.5f;
     float vertical_speed_min = 0.0f;
     float vertical_speed_max = 0.75f;
-    float acceleration_min = 5.0f;
-    float acceleration_max = 5.0f;
-    float change_min = 0.75f;
-    float change_max = 1.50f;
-};
-
-struct PillTrackingSettings {
-    float width = 1.13f;
-    float distance_min = 6.80f;
-    float distance_max = 9.55f;
-    float speed = 3.64f;
-    float acceleration = 10.91f;
-    float change_min = 0.35f;
-    float change_max = 2.4f;
+    float acceleration_min = 8.0f;
+    float acceleration_max = 8.0f;
+    float change_min = 1.0f;
+    float change_max = 2.0f;
 };
 
 struct CrosshairSettings {
@@ -128,11 +114,6 @@ struct WallPreset {
     WallClickSettings settings;
 };
 
-struct PillPreset {
-    std::string name;
-    PillTrackingSettings settings;
-};
-
 struct ScenarioDef {
     const char* title;
     ScenarioKind kind;
@@ -150,6 +131,7 @@ struct Target {
     float radius;
     float acceleration = 0.0f;
     float distance = 0.0f;  // wall targets: depth in meters (sets the plane bounds)
+    int health = 0;         // remaining hits until respawn; 0 with settings health 0 is infinite
 };
 
 struct Stats {
@@ -201,15 +183,10 @@ struct Game {
     TargetColorSettings target_color;
     WallColorSettings wall_color;
     WallClickSettings wall_settings;
-    PillTrackingSettings pill_settings;
     std::vector<WallPreset> wall_presets;
-    std::vector<PillPreset> pill_presets;
     int selected_wall_preset = 0;
-    int selected_pill_preset = 0;
     int wall_preset_scroll = 0;
-    int pill_preset_scroll = 0;
-    std::string wall_preset_name = "1W3T DYNAMIC";
-    std::string pill_preset_name = "SMOOTH PILL";
+    std::string wall_preset_name = "1W2T DYNAMIC";
     MenuTab menu_tab = MenuTab::Clicking;
     // Text-box editing state. `active_field` is the focused box (None = idle);
     // `edit_draft` is the raw text being typed; `edit_fresh` is true right after

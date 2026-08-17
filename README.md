@@ -14,10 +14,12 @@ In a scenario:
 
 In the menu:
 
-- Pick a tab (`CLICKING`, `TRACKING`, `GENERAL`) and a preset from the list.
+- Pick a tab (`TASKS`, `GENERAL`) and a preset from the list.
 - Every setting is a text box. Click a box (or press `TAB`) to focus it, then type the value.
   The first keystroke replaces the shown number; backspace edits it.
 - `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
+- Each task can be `CLICKING` or `TRACKING`. Both modes have a `HEALTH` setting (`1` = one shot, `N` = N hits, `0` = infinite).
+- `RESET TASKS` replaces every saved task with the list in `scripts/default-tasks.py`.
 - `PRACTICE` starts an endless run; `CHALLENGE` starts a timed 60-second run.
   Clicking an already-selected preset in the list also starts a challenge.
 - `NEW` copies the current selected/editor values in that tab.
@@ -99,9 +101,9 @@ This installs/refreshes `Aim Trainer Dev`, which uses the same launcher, so doub
 
 ## Modes And Settings
 
-- Wall clicking: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static clicking. Distance only changes room depth along the starting view axis; wall width/height stay fixed, so farther targets occupy a smaller angular spawn area.
-- Default clicking presets are ordered as dynamic `1W3T`/`1W3TS`, strafe normal/small/extra-small, then static `1W2T`, `1W4TS`, `1W8TES`, and `1W16T`.
-- 360 pill tracking: pill width, min/max distance from the player, movement speed, acceleration, and min/max direction-change timing.
+- Wall tasks: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Set both speed values to `0` for static targets. Distance only changes room depth along the starting view axis; wall width/height stay fixed, so farther targets occupy a smaller angular spawn area.
+- Each wall task can be clicking or tracking. Tracking auto-fires at 20 Hz in challenge mode (score = hits). Target health is how many hits destroy a target in either mode (`1` = one shot, `N` = N hits, `0` = infinite / never despawns). Clicking with health `0` is click-tracking: every click on the target scores, but the target stays.
+- Default clicking presets come from `scripts/default-tasks.py`. A default task is size, wall (`close` / `mid` / `far`), a fixed target count, movement (`static` / `strafing` / `dynamic`), mode (`clicking` / `tracking`), and health. Mid wall is the default and is omitted from the name; close and far append `CLOSE` or `FAR`. Edit that Python file and click **RESET TASKS** to reload it immediately (no rebuild). `python scripts/default-tasks.py` still regenerates the committed JSON/C++ table for the next compile.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
 - User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
@@ -114,6 +116,8 @@ The code is split into focused translation units:
 - `types.hpp` — shared structs, enums, constants, and the `Game` state.
 - `world.{hpp,cpp}` — unit conversions, room geometry, camera, and RNG helpers.
 - `config.{hpp,cpp}` — settings normalization, presets, and save/load.
+- `default_tasks.inc` — generated built-in task table (`python scripts/default-tasks.py`).
+- `data/default-tasks.json` — human-readable default task definitions.
 - `scenario.{hpp,cpp}` — target spawning, movement, and scenario simulation.
 - `render.{hpp,cpp}` — bitmap font, 2D primitives, 3D world, and the in-scenario HUD.
 - `menu.{hpp,cpp}` — the text-box settings menu and its editing state machine.
@@ -127,7 +131,7 @@ Render screenshots without manually playing:
 ```sh
 build/aim-trainer --debug-all debug-shots 1920 1080
 build/aim-trainer --debug-menu debug-shots/menu.bmp 1920 1080
-build/aim-trainer --debug-shot 1 debug-shots/tracking-360.bmp 1920 1080 8
+build/aim-trainer --debug-shot 1 debug-shots/tracking.bmp 1920 1080 8
 ```
 
 The screenshot runner uses the same render path as the app and saves high-DPI BMP captures.

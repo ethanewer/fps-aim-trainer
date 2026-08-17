@@ -53,7 +53,15 @@ void normalize_settings(Game& game);
 void ensure_presets(Game& game);
 void apply_selected_presets(Game& game);
 void save_current_wall_preset(Game& game);
-void save_current_pill_preset(Game& game);
+void reset_wall_presets(Game& game);
+
+// RESET TASKS re-runs scripts/default-tasks.py when found next to the repo.
+// The dumped list becomes the live builtin table so ensure_presets will not
+// re-inject the compiled defaults (target-count edits change preset names).
+// Tests can force a dump file, a script path, or disable live Python.
+extern std::string g_default_tasks_dump_override;
+extern std::string g_default_tasks_script_override;
+extern bool g_live_default_tasks;
 
 // Persistence.
 std::string settings_path();

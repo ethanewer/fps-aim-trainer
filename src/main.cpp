@@ -244,13 +244,17 @@ static bool render_debug_shot(int scenario_index, const std::string& path, int w
     game.rng.seed(7);
     load_settings(game);
     init_scenarios(game);
-    if (scenario_index < 0 || scenario_index >= static_cast<int>(game.scenarios.size())) {
+    if (scenario_index < 0 || scenario_index > 1 || game.scenarios.empty()) {
         std::fprintf(stderr, "Invalid scenario index %d\n", scenario_index);
         SDL_GL_DeleteContext(gl);
         SDL_DestroyWindow(window);
         return false;
     }
-    start_scenario(game, game.scenarios[scenario_index]);
+    if (scenario_index == 1) {
+        game.wall_settings.task_mode = TaskMode::Tracking;
+        game.wall_settings.target_health = 0;
+    }
+    start_scenario(game, game.scenarios[0]);
 
     for (int frame = 0; frame < std::max(1, frames); ++frame) {
         Input input;
@@ -287,29 +291,17 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
     load_settings(game);
     load_runs(game);
     init_scenarios(game);
-    if (tab_index == 1) game.menu_tab = MenuTab::Tracking;
-    else if (tab_index == 2) game.menu_tab = MenuTab::General;
+    if (tab_index >= 1) game.menu_tab = MenuTab::General;
     else game.menu_tab = MenuTab::Clicking;
     if (state_index == 1) {
-        if (game.menu_tab == MenuTab::Tracking) {
-            game.pill_preset_name.clear();
-            menu_focus_field(game, FieldId::PillName);
-        } else {
-            game.wall_preset_name.clear();
-            menu_focus_field(game, FieldId::WallName);
-        }
+        game.wall_preset_name.clear();
+        menu_focus_field(game, FieldId::WallName);
     } else if (state_index == 2) {
-        if (game.menu_tab == MenuTab::Tracking) {
-            game.pill_preset_name = "THIS NAME IS EXACTLY M";
-            menu_focus_field(game, FieldId::PillName);
-        } else {
-            game.wall_preset_name = "THIS NAME IS EXACTLY M";
-            menu_focus_field(game, FieldId::WallName);
-        }
+        game.wall_preset_name = "THIS NAME IS EXACTLY M";
+        menu_focus_field(game, FieldId::WallName);
     } else if (state_index == 5) {
         // Focused numeric box mid-edit (validates the active value-box look).
-        if (game.menu_tab == MenuTab::Tracking) menu_focus_field(game, FieldId::PillDistMax);
-        else menu_focus_field(game, FieldId::WallRadiusMin);
+        menu_focus_field(game, FieldId::WallRadiusMin);
         game.edit_draft = "0.12";
         game.edit_fresh = false;
     } else if (state_index == 3) {
@@ -317,11 +309,9 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
             char name[32];
             std::snprintf(name, sizeof(name), "LONG PRESET NAME %02d", i + 1);
             game.wall_presets.push_back({name, game.wall_settings});
-            game.pill_presets.push_back({name, game.pill_settings});
         }
         ensure_presets(game);
         game.wall_preset_scroll = std::max(0, static_cast<int>(game.wall_presets.size()) - 7);
-        game.pill_preset_scroll = std::max(0, static_cast<int>(game.pill_presets.size()) - 7);
     } else if (state_index == 4) {
         game.menu_tab = MenuTab::Clicking;
         game.wall_preset_name = "MAX RANGE STRESS TEST";
@@ -339,6 +329,11 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
         game.wall_settings.acceleration_max = 40.0f;
         game.wall_settings.change_min = 11.90f;
         game.wall_settings.change_max = 12.00f;
+        normalize_settings(game);
+    } else if (state_index == 6) {
+        game.menu_tab = MenuTab::Clicking;
+        game.wall_settings.task_mode = TaskMode::Tracking;
+        game.wall_settings.target_health = 20;
         normalize_settings(game);
     }
     Input input;
@@ -368,7 +363,7 @@ static bool render_debug_results(const std::string& path, int width, int height,
 
     Game game;
     init_scenarios(game);
-    ScenarioKind kind = scenario_index == 1 ? ScenarioKind::PillTracking : ScenarioKind::WallClick;
+    ScenarioKind kind = scenario_index == 1 ? ScenarioKind::Tracking : ScenarioKind::WallClick;
     RunRecord previous;
     previous.kind = kind;
     previous.preset_name = "1W3T DYNAMIC";
@@ -452,9 +447,7 @@ static int run_debug_mode(int argc, char** argv) {
         }
         make_dir_if_needed(argv[2]);
         bool ok = true;
-        Game scenario_count_game;
-        init_scenarios(scenario_count_game);
-        for (int scenario = 0; scenario < static_cast<int>(scenario_count_game.scenarios.size()); ++scenario) {
+        for (int scenario = 0; scenario < 2; ++scenario) {
             char path[1024];
             std::snprintf(path, sizeof(path), "%s/scenario-%d.bmp", argv[2], scenario);
             ok = render_debug_shot(scenario, path, width, height, frames) && ok;

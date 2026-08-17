@@ -10,13 +10,13 @@ Guidance for AI agents (and humans) working in this repository. Read this before
   engine or UI toolkit — everything (3D scene, bitmap font, menu, HUD) is drawn by hand.
 - **Platforms:** macOS is primary (SDL2 from Homebrew). Linux and Windows are supported by the
   same source; see `README.md` for per-platform build notes.
-- **What it does:** two scenarios — `WALL CLICKING` and `360 PILL TRACKING` — rendered in a 3D
-  room. Aim uses a fixed-FOV sensitivity model (horizontal FOV locked to 103°, yaw =
+- **What it does:** wall tasks in a 3D room, each of which can be `CLICKING` or `TRACKING`.
+  Aim uses a fixed-FOV sensitivity model (horizontal FOV locked to 103°, yaw =
   `0.07° per mouse count × in-game sensitivity`). All user-facing distances/sizes/speeds are in
   meters / m·s⁻¹ / m·s⁻², converted to internal units against a 2 m camera-height reference.
 - **Run modes** (`RunMode`): `Practice` (endless) and `Challenge` (a `CHALLENGE_DURATION_SEC` timed
   run whose score is hits; tracking auto-fires at `TRACKING_FIRE_HZ`). Accuracy is recorded but is
-  not the score.
+  not the score. Wall tasks can set target health (`1` = one shot, `N` = N hits, `0` = infinite).
   `start_scenario` takes the mode; `update_playing` runs the timer/auto-fire and calls
   `finalize_challenge` on expiry, which appends a `RunRecord` and switches to `AppMode::Results`.
 - **Settings & presets** persist to `~/.aim_trainer.cfg` (macOS/Linux) or
@@ -36,6 +36,8 @@ downward (upper modules may include lower ones, not vice-versa):
 | `src/types.hpp` | Shared structs, enums, constants, the `Game` state, and `FieldId` (menu fields). |
 | `src/world.{hpp,cpp}` | Meters↔units conversions, room/wall/tracking geometry, camera, RNG, far-plane. |
 | `src/config.{hpp,cpp}` | Settings normalization/clamping, presets, and `.cfg` save/load + migration. |
+| `src/default_tasks.inc` | Generated default-task table (from `scripts/default-tasks.py`). |
+| `data/default-tasks.json` | Human-readable default-task definitions. |
 | `src/scenario.{hpp,cpp}` | Target spawning, movement physics, and scenario simulation. |
 | `src/render.{hpp,cpp}` | Bitmap font + glyphs, 2D primitives, 3D world, in-scenario HUD. |
 | `src/menu.{hpp,cpp}` | The text-box settings menu and its editing state machine. |
@@ -54,6 +56,7 @@ Requires SDL2 (`brew install sdl2` on macOS). From the repo root:
 make            # build build/aim-trainer (compiles all src/*.cpp, links SDL2 + OpenGL)
 make run        # build and run
 make clean      # remove build/
+make default-tasks # regenerate data/default-tasks.json and src/default_tasks.inc
 make app-dev    # build and install "~/Desktop/Aim Trainer Dev.app" (macOS dev bundle)
 make app-stable # build and install "~/Desktop/Aim Trainer.app" (macOS stable bundle)
 ```
@@ -135,15 +138,16 @@ every menu or rendering change.
 
 ```sh
 # Menu: --debug-menu <out.bmp> [width height tab state]
-#   tab:   0=CLICKING  1=TRACKING  2=GENERAL
+#   tab:   0=TASKS  1=GENERAL
 #   state: 0=default  1=empty-name editing  2=long-name editing
 #          3=long preset list (scrolled)  4=max-range stress  5=focused numeric box
+#          6=tracking mode selected
 ./build/aim-trainer --debug-menu /tmp/menu.bmp 1920 1080 0 0
 
-# Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=wall, 1=pill)
-./build/aim-trainer --debug-shot 1 /tmp/pill.bmp 1920 1080 8
+# Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=clicking, 1=tracking)
+./build/aim-trainer --debug-shot 0 /tmp/wall.bmp 1920 1080 8
 
-# Challenge results screen: --debug-results <out.bmp> [width height scenario]  (0=wall, 1=pill)
+# Challenge results screen: --debug-results <out.bmp> [width height scenario]  (0=clicking, 1=tracking)
 ./build/aim-trainer --debug-results /tmp/results.bmp 1920 1080 0
 
 # All scenarios into a directory:
@@ -160,9 +164,9 @@ Image.open("/tmp/menu.bmp").convert("RGB").resize((1280, 720)).save("/tmp/menu.p
 PY
 ```
 
-Then open/Read the PNG. When validating a menu change, render all three tabs plus the relevant
-state (e.g. `5` to confirm the focused-box look) and visually confirm alignment, overflow, and
-focus highlighting.
+Then open/Read the PNG. When validating a menu change, render both tabs plus the relevant
+state (e.g. `5` to confirm the focused-box look, `6` for tracking selected) and visually confirm
+alignment, overflow, and focus highlighting.
 
 ## Conventions & gotchas
 
@@ -185,10 +189,21 @@ focus highlighting.
   The room/far-plane depth is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files. (Current: `version 7`; v4 single wall
-  distance migrates to a min==max range.)
+  format. Don't silently break existing `.cfg` files. (Current: `version 10`; v9 built-in presets
+  migrate to an 8-10m wall range; v8 clicking presets with unused health 0 migrate to one-shot
+  health 1; v7 wall presets migrate to clicking with health 1; v4 single wall distance migrates
+  to a min==max range. Leftover `pill_preset` lines are ignored.)
+  Default tasks live in `data/default-tasks.json` as size, wall (`close` / `mid` / `far`),
+  a fixed target count, movement (`static` / `strafing` / `dynamic`), mode, and health.
+  Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`.
+  Edit `scripts/default-tasks.py` and click **RESET TASKS** to re-run that script and
+  replace every saved preset. The dumped list becomes the live builtin table for that
+  session, so target-count edits (which change preset names) are not overwritten by the
+  compiled `default_tasks.inc` table. Run `python scripts/default-tasks.py` (add `--from-json`
+  if you edited the JSON) when you want to refresh `src/default_tasks.inc` for the next compile.
 - **Don't commit build artifacts.** `build/`, `target/`, and `debug-shots/` are gitignored; keep
-  them out of commits. The repo tracks only source, `Makefile`, `README.md`, and docs.
+  them out of commits. Do commit `data/default-tasks.json` and `src/default_tasks.inc` after
+  regenerating defaults. The repo tracks source, `Makefile`, `README.md`, docs, and that task table.
 - **Git:** branch off `main` before committing; keep commits focused. Run the self-test and a
   warning-clean build before committing.
 

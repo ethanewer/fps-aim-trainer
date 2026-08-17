@@ -63,6 +63,7 @@ static FieldDesc field_desc(Game& g, FieldId id) {
     int capacity = wall_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance_max);
     switch (id) {
         case FieldId::WallName: return f_name(&g.wall_preset_name);
+        case FieldId::WallHealth: return f_int(&g.wall_settings.target_health, 0, WALL_TARGET_HEALTH_MAX);
         case FieldId::WallDistMin: return f_float(&g.wall_settings.wall_distance_min, 2.0f, 30.0f, 2);
         case FieldId::WallDistMax: return f_float(&g.wall_settings.wall_distance_max, 2.0f, 30.0f, 2);
         case FieldId::WallTargetsMin: return f_int(&g.wall_settings.target_count_min, 1, capacity);
@@ -77,14 +78,6 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::WallAccelMax: return f_float(&g.wall_settings.acceleration_max, 0.0f, 40.0f, 2);
         case FieldId::WallDirMin: return f_float(&g.wall_settings.change_min, 0.0f, 12.0f, 2);
         case FieldId::WallDirMax: return f_float(&g.wall_settings.change_max, 0.0f, 12.0f, 2);
-        case FieldId::PillName: return f_name(&g.pill_preset_name);
-        case FieldId::PillWidth: return f_float(&g.pill_settings.width, 0.20f, 2.5f, 2);
-        case FieldId::PillDistMin: return f_float(&g.pill_settings.distance_min, 1.5f, 30.0f, 2);
-        case FieldId::PillDistMax: return f_float(&g.pill_settings.distance_max, 1.5f, 30.0f, 2);
-        case FieldId::PillSpeed: return f_float(&g.pill_settings.speed, 0.0f, pill_speed_max_meters(), 2);
-        case FieldId::PillAccel: return f_float(&g.pill_settings.acceleration, 0.0f, pill_acceleration_max_meters(), 2);
-        case FieldId::PillDirMin: return f_float(&g.pill_settings.change_min, 0.05f, 8.0f, 2);
-        case FieldId::PillDirMax: return f_float(&g.pill_settings.change_max, 0.05f, 12.0f, 2);
         case FieldId::GenSens: return f_float(&g.sensitivity, 0.001f, 10.0f, 3);
         case FieldId::GenLength: return f_float(&g.crosshair.length, 4.0f, 24.0f, 0);
         case FieldId::GenGap: return f_float(&g.crosshair.gap, 0.0f, 16.0f, 0);
@@ -173,7 +166,8 @@ void menu_cancel_edit(Game& g) {
 }
 
 static const FieldId WALL_ORDER[] = {
-    FieldId::WallName, FieldId::WallDistMin, FieldId::WallDistMax,
+    FieldId::WallName, FieldId::WallHealth,
+    FieldId::WallDistMin, FieldId::WallDistMax,
     FieldId::WallTargetsMin, FieldId::WallTargetsMax,
     FieldId::WallRadiusMin, FieldId::WallRadiusMax,
     FieldId::WallHSpeedMin, FieldId::WallHSpeedMax,
@@ -181,30 +175,29 @@ static const FieldId WALL_ORDER[] = {
     FieldId::WallAccelMin, FieldId::WallAccelMax,
     FieldId::WallDirMin, FieldId::WallDirMax,
 };
-static const FieldId PILL_ORDER[] = {
-    FieldId::PillName, FieldId::PillWidth,
-    FieldId::PillDistMin, FieldId::PillDistMax,
-    FieldId::PillSpeed, FieldId::PillAccel,
-    FieldId::PillDirMin, FieldId::PillDirMax,
-};
 static const FieldId GEN_ORDER[] = {
     FieldId::GenSens, FieldId::GenLength, FieldId::GenGap, FieldId::GenThick,
     FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB,
     FieldId::GenWallR, FieldId::GenWallG, FieldId::GenWallB,
 };
 
-static void tab_field_order(MenuTab tab, const FieldId** order, int* count) {
-    switch (tab) {
-        case MenuTab::Clicking: *order = WALL_ORDER; *count = static_cast<int>(sizeof(WALL_ORDER) / sizeof(WALL_ORDER[0])); break;
-        case MenuTab::Tracking: *order = PILL_ORDER; *count = static_cast<int>(sizeof(PILL_ORDER) / sizeof(PILL_ORDER[0])); break;
-        default: *order = GEN_ORDER; *count = static_cast<int>(sizeof(GEN_ORDER) / sizeof(GEN_ORDER[0])); break;
+static void tab_field_order(const Game& g, const FieldId** order, int* count) {
+    switch (g.menu_tab) {
+        case MenuTab::Clicking:
+            *order = WALL_ORDER;
+            *count = static_cast<int>(sizeof(WALL_ORDER) / sizeof(WALL_ORDER[0]));
+            break;
+        default:
+            *order = GEN_ORDER;
+            *count = static_cast<int>(sizeof(GEN_ORDER) / sizeof(GEN_ORDER[0]));
+            break;
     }
 }
 
 static FieldId field_step(const Game& g, int dir) {
     const FieldId* order = nullptr;
     int count = 0;
-    tab_field_order(g.menu_tab, &order, &count);
+    tab_field_order(g, &order, &count);
     int idx = 0;
     bool found = false;
     for (int i = 0; i < count; ++i) {
@@ -297,22 +290,10 @@ void new_wall_preset(Game& game) {
     reveal_selected_preset(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll);
 }
 
-void new_pill_preset(Game& game) {
-    char name[32];
-    std::snprintf(name, sizeof(name), "TRACK PRESET %d", static_cast<int>(game.pill_presets.size()) + 1);
-    game.active_field = FieldId::None;
-    std::string unique_name = unique_preset_name(game.pill_presets, name, -1);
-    game.pill_presets.push_back({unique_name, game.pill_settings});
-    game.selected_pill_preset = static_cast<int>(game.pill_presets.size()) - 1;
-    game.pill_settings = game.pill_presets.back().settings;
-    game.pill_preset_name = game.pill_presets.back().name;
-    reveal_selected_preset(game.selected_pill_preset, static_cast<int>(game.pill_presets.size()), game.pill_preset_scroll);
-}
-
 void delete_wall_preset(Game& game) {
     game.active_field = FieldId::None;
     if (game.wall_presets.size() <= 1) {
-        game.wall_presets[0] = {"1W3T DYNAMIC", WallClickSettings{}};
+        game.wall_presets.clear();
         game.selected_wall_preset = 0;
     } else {
         game.wall_presets.erase(game.wall_presets.begin() + game.selected_wall_preset);
@@ -320,19 +301,6 @@ void delete_wall_preset(Game& game) {
     }
     apply_selected_presets(game);
     reveal_selected_preset(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll);
-}
-
-void delete_pill_preset(Game& game) {
-    game.active_field = FieldId::None;
-    if (game.pill_presets.size() <= 1) {
-        game.pill_presets[0] = {"SMOOTH PILL", PillTrackingSettings{}};
-        game.selected_pill_preset = 0;
-    } else {
-        game.pill_presets.erase(game.pill_presets.begin() + game.selected_pill_preset);
-        game.selected_pill_preset = std::max(0, std::min(game.selected_pill_preset, static_cast<int>(game.pill_presets.size()) - 1));
-    }
-    apply_selected_presets(game);
-    reveal_selected_preset(game.selected_pill_preset, static_cast<int>(game.pill_presets.size()), game.pill_preset_scroll);
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +358,25 @@ static bool primary_button(const Input& in, float x, float y, float w, float h, 
     float lw = text_width(label, scale);
     text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - 7.0f * scale) * 0.5f), label, scale, 248, 248, 248);
     return hovered && in.left_pressed;
+}
+
+static bool toggle_button(const Input& in, float x, float y, float w, float h, const std::string& label, bool selected) {
+    bool hovered = hit(in, x, y, w, h);
+    if (selected) rect(x, y, w, h, 255, 70, 85);
+    else if (hovered) rect(x, y, w, h, 52, 60, 72);
+    else rect(x, y, w, h, 40, 46, 56);
+    uint8_t br = selected ? 255 : (hovered ? 132 : 94);
+    uint8_t bg = selected ? 120 : (hovered ? 148 : 108);
+    uint8_t bb = selected ? 132 : (hovered ? 168 : 125);
+    rect(x, y, w, 2.0f, br, bg, bb);
+    rect(x, y + h - 2.0f, w, 2.0f, br, bg, bb);
+    rect(x, y, 2.0f, h, br, bg, bb);
+    rect(x + w - 2.0f, y, 2.0f, h, br, bg, bb);
+    float scale = 2.0f;
+    float lw = text_width(label, scale);
+    text(x + std::max(6.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - 7.0f * scale) * 0.5f), label, scale,
+         selected ? 248 : 225, selected ? 248 : 232, selected ? 248 : 240);
+    return hovered && in.left_pressed && !selected;
 }
 
 static void tab_button(Game& g, const Input& in, float x, float y, const std::string& label, MenuTab tab) {
@@ -479,18 +466,18 @@ static void color_row(Game& g, const Input& in, float label_x, float value_x, fl
 // ---------------------------------------------------------------------------
 
 static const float CARD_Y = 234.0f;
-static const float CARD_H = 446.0f;
+static const float CARD_H = 474.0f;
 static const float SIDEBAR_W = 290.0f;
 static const float EDITOR_DX = 306.0f;
 static const float EDITOR_W = 662.0f;
 
-static void draw_preset_sidebar(Game& g, const Input& in, float x, bool tracking) {
+static void draw_preset_sidebar(Game& g, const Input& in, float x) {
     draw_card(x, CARD_Y, SIDEBAR_W, CARD_H);
     text(x + 16.0f, CARD_Y + 14.0f, "PRESETS", 2.0f, 150, 162, 178);
 
-    int count = tracking ? static_cast<int>(g.pill_presets.size()) : static_cast<int>(g.wall_presets.size());
-    int& scroll = tracking ? g.pill_preset_scroll : g.wall_preset_scroll;
-    int& selected = tracking ? g.selected_pill_preset : g.selected_wall_preset;
+    int count = static_cast<int>(g.wall_presets.size());
+    int& scroll = g.wall_preset_scroll;
+    int& selected = g.selected_wall_preset;
     int max_scroll = std::max(0, count - VISIBLE_PRESET_ROWS);
     if (in.wheel_y != 0) {
         scroll = std::max(0, std::min(scroll - in.wheel_y, max_scroll));
@@ -505,7 +492,7 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x, bool tracking
         if (index >= count) {
             break;
         }
-        const std::string& name = tracking ? g.pill_presets[index].name : g.wall_presets[index].name;
+        const std::string& name = g.wall_presets[index].name;
         bool is_selected = index == selected;
         float y = list_y + row * 40.0f;
         bool clicked = list_button(in, row_x, y, row_w, 34.0f, name, is_selected);
@@ -516,48 +503,44 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x, bool tracking
             menu_blur_field(g);
             if (is_selected) {
                 // Clicking the already-selected scenario starts a challenge run.
-                start_scenario(g, g.scenarios[tracking ? 1 : 0], RunMode::Challenge);
+                start_scenario(g, g.scenarios[0], RunMode::Challenge);
             } else {
                 selected = index;
-                if (tracking) {
-                    g.pill_settings = g.pill_presets[index].settings;
-                    g.pill_preset_name = g.pill_presets[index].name;
-                } else {
-                    g.wall_settings = g.wall_presets[index].settings;
-                    g.wall_preset_name = g.wall_presets[index].name;
-                }
+                g.wall_settings = g.wall_presets[index].settings;
+                g.wall_preset_name = g.wall_presets[index].name;
             }
         }
     }
 
-    float button_y = CARD_Y + CARD_H - 90.0f;
+    float button_y = CARD_Y + CARD_H - 126.0f;
     if (secondary_button(in, row_x, button_y, 120.0f, 34.0f, "NEW", 2.0f)) {
         menu_blur_field(g);
-        if (tracking) new_pill_preset(g);
-        else new_wall_preset(g);
+        new_wall_preset(g);
     }
     if (secondary_button(in, row_x + 132.0f, button_y, row_w - 132.0f, 34.0f, "DELETE", 2.0f)) {
         menu_blur_field(g);
-        if (tracking) delete_pill_preset(g);
-        else delete_wall_preset(g);
+        delete_wall_preset(g);
     }
     if (secondary_button(in, row_x, button_y + 42.0f, row_w, 34.0f, "SAVE PRESET", 2.0f)) {
         menu_blur_field(g);
-        if (tracking) save_current_pill_preset(g);
-        else save_current_wall_preset(g);
+        save_current_wall_preset(g);
+        save_settings(g);
+    }
+    if (secondary_button(in, row_x, button_y + 84.0f, row_w, 34.0f, "RESET TASKS", 2.0f)) {
+        menu_blur_field(g);
+        reset_wall_presets(g);
         save_settings(g);
     }
 }
 
 // Shared editor card chrome: title, BEST readout, NAME box, PRACTICE/CHALLENGE.
-static void draw_editor_header(Game& g, const Input& in, float x, const std::string& title, FieldId name_id, ScenarioKind kind, int scenario_index) {
+static void draw_editor_header(Game& g, const Input& in, float x, const std::string& title, FieldId name_id, ScenarioKind kind) {
     draw_card(x, CARD_Y, EDITOR_W, CARD_H);
     float cl = x + 16.0f;
     text(cl, CARD_Y + 12.0f, title, 2.8f, 230, 236, 244);
 
     // Best challenge score for the selected preset, right-aligned on the title row.
-    const std::string& preset = kind == ScenarioKind::WallClick ? g.wall_preset_name : g.pill_preset_name;
-    int best = best_run_score(g, kind, preset);
+    int best = best_run_score(g, kind, g.wall_preset_name);
     if (best >= 0) {
         char buf[48];
         std::snprintf(buf, sizeof(buf), "BEST %d", best);
@@ -577,24 +560,21 @@ static void draw_editor_header(Game& g, const Input& in, float x, const std::str
     float bw = (buttons_right - buttons_x - gap) * 0.5f;
     if (secondary_button(in, buttons_x, row_y, bw, 36.0f, "PRACTICE", 2.0f)) {
         menu_blur_field(g);
-        start_scenario(g, g.scenarios[scenario_index], RunMode::Practice);
+        start_scenario(g, g.scenarios[0], RunMode::Practice);
     }
     if (primary_button(in, buttons_x + bw + gap, row_y, bw, 36.0f, "CHALLENGE", 2.0f)) {
         menu_blur_field(g);
-        start_scenario(g, g.scenarios[scenario_index], RunMode::Challenge);
+        start_scenario(g, g.scenarios[0], RunMode::Challenge);
     }
     divider(cl, CARD_Y + 94.0f, EDITOR_W - 32.0f);
 }
 
-static void draw_column_headers(float min_x, float max_x, float box_w, bool show_max) {
-    float y = CARD_Y + 104.0f;
+static void draw_column_headers(float min_x, float max_x, float box_w, float y) {
     // Right-align headers to the same edge as the right-aligned box values.
     std::string mn = "MIN";
     text(min_x + box_w - 12.0f - text_width(mn, 1.5f), y, mn, 1.5f, 150, 162, 178);
-    if (show_max) {
-        std::string mx = "MAX";
-        text(max_x + box_w - 12.0f - text_width(mx, 1.5f), y, mx, 1.5f, 150, 162, 178);
-    }
+    std::string mx = "MAX";
+    text(max_x + box_w - 12.0f - text_width(mx, 1.5f), y, mx, 1.5f, 150, 162, 178);
 }
 
 static void draw_footer_hint(float x) {
@@ -602,21 +582,43 @@ static void draw_footer_hint(float x) {
     text(x + 16.0f, CARD_Y + CARD_H - 30.0f, "TAB NEXT BOX   ENTER COMMITS   ESC CANCELS", 1.7f, 150, 162, 178);
 }
 
-static void draw_clicking_tab(Game& g, const Input& in, float left) {
-    draw_preset_sidebar(g, in, left, false);
+static void draw_tasks_tab(Game& g, const Input& in, float left) {
+    draw_preset_sidebar(g, in, left);
 
     float x = left + EDITOR_DX;
-    draw_editor_header(g, in, x, "WALL CLICKING", FieldId::WallName, ScenarioKind::WallClick, 0);
+    bool tracking = is_tracking(g.wall_settings.task_mode);
+    ScenarioKind kind = tracking ? ScenarioKind::Tracking : ScenarioKind::WallClick;
+    draw_editor_header(g, in, x, tracking ? "WALL TRACKING" : "WALL CLICKING", FieldId::WallName, kind);
 
     float cl = x + 16.0f;
     float min_x = cl + 272.0f;
     float max_x = cl + 408.0f;
     float box_w = 116.0f;
     float box_h = 30.0f;
-    draw_column_headers(min_x, max_x, box_w, true);
 
-    float row_y = CARD_Y + 126.0f;
-    const float pitch = 38.0f;
+    float row_y = CARD_Y + 108.0f;
+    const float pitch = 32.0f;
+    field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "TASK");
+    float task_x = cl + 78.0f;
+    float task_w = 120.0f;
+    if (toggle_button(in, task_x, row_y, task_w, box_h, "CLICKING", !tracking)) {
+        menu_blur_field(g);
+        g.wall_settings.task_mode = TaskMode::Clicking;
+    }
+    if (toggle_button(in, task_x + task_w + 8.0f, row_y, task_w, box_h, "TRACKING", tracking)) {
+        menu_blur_field(g);
+        g.wall_settings.task_mode = TaskMode::Tracking;
+    }
+    row_y += pitch;
+
+    field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "HEALTH");
+    value_box(g, in, FieldId::WallHealth, min_x, row_y, box_w, box_h);
+    text(min_x + box_w + 12.0f, row_y + (box_h - GLYPH_H) * 0.5f, "0 INF", 1.7f, 150, 162, 178);
+
+    divider(cl, CARD_Y + 176.0f, EDITOR_W - 32.0f);
+    draw_column_headers(min_x, max_x, box_w, CARD_Y + 184.0f);
+    row_y = CARD_Y + 200.0f;
+
     row_range(g, in, cl, min_x, max_x, row_y, "WALL [M]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "TARGETS", FieldId::WallTargetsMin, FieldId::WallTargetsMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "RADIUS [M]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
@@ -624,30 +626,6 @@ static void draw_clicking_tab(Game& g, const Input& in, float left) {
     row_range(g, in, cl, min_x, max_x, row_y, "V SPEED [M/S]", FieldId::WallVSpeedMin, FieldId::WallVSpeedMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "ACCEL [M/S2]", FieldId::WallAccelMin, FieldId::WallAccelMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "DIR CHANGE [SEC]", FieldId::WallDirMin, FieldId::WallDirMax, box_w, box_h);
-
-    draw_footer_hint(x);
-}
-
-static void draw_tracking_tab(Game& g, const Input& in, float left) {
-    draw_preset_sidebar(g, in, left, true);
-
-    float x = left + EDITOR_DX;
-    draw_editor_header(g, in, x, "PILL TRACKING", FieldId::PillName, ScenarioKind::PillTracking, 1);
-
-    float cl = x + 16.0f;
-    float min_x = cl + 272.0f;
-    float max_x = cl + 408.0f;
-    float box_w = 116.0f;
-    float box_h = 30.0f;
-    draw_column_headers(min_x, max_x, box_w, true);
-
-    float row_y = CARD_Y + 126.0f;
-    const float pitch = 38.0f;
-    row_single(g, in, cl, min_x, row_y, "PILL WIDTH [M]", FieldId::PillWidth, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "DIST [M]", FieldId::PillDistMin, FieldId::PillDistMax, box_w, box_h); row_y += pitch;
-    row_single(g, in, cl, min_x, row_y, "SPEED [M/S]", FieldId::PillSpeed, box_w, box_h); row_y += pitch;
-    row_single(g, in, cl, min_x, row_y, "ACCEL [M/S2]", FieldId::PillAccel, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "DIR CHANGE [SEC]", FieldId::PillDirMin, FieldId::PillDirMax, box_w, box_h);
 
     draw_footer_hint(x);
 }
@@ -726,14 +704,11 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
     text(left, 134.0f, "MATCH YOUR IN-GAME SENSITIVITY", 2.0f, 150, 162, 178);
 
     float tabs_y = 170.0f;
-    tab_button(game, ui_input, left, tabs_y, "CLICKING", MenuTab::Clicking);
-    tab_button(game, ui_input, left + 210.0f, tabs_y, "TRACKING", MenuTab::Tracking);
-    tab_button(game, ui_input, left + 420.0f, tabs_y, "GENERAL", MenuTab::General);
+    tab_button(game, ui_input, left, tabs_y, "TASKS", MenuTab::Clicking);
+    tab_button(game, ui_input, left + 210.0f, tabs_y, "GENERAL", MenuTab::General);
 
     if (game.menu_tab == MenuTab::Clicking) {
-        draw_clicking_tab(game, ui_input, left);
-    } else if (game.menu_tab == MenuTab::Tracking) {
-        draw_tracking_tab(game, ui_input, left);
+        draw_tasks_tab(game, ui_input, left);
     } else {
         draw_general_tab(game, ui_input, left);
     }
@@ -764,7 +739,7 @@ void draw_results(const Game& game, int w, int h) {
     }
     bool new_best = prev_best < 0 || run.score > prev_best;
     int best = std::max(prev_best, run.score);
-    const char* scenario_title = run.kind == ScenarioKind::WallClick ? "WALL CLICKING" : "360 PILL TRACKING";
+    const char* scenario_title = run.kind == ScenarioKind::Tracking ? "WALL TRACKING" : "WALL CLICKING";
 
     float card_w = 560.0f;
     float card_h = 430.0f;

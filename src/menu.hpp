@@ -16,6 +16,4 @@ void menu_cancel_edit(Game& game);   // discard the active field and unfocus
 
 // Preset actions.
 void new_wall_preset(Game& game);
-void new_pill_preset(Game& game);
 void delete_wall_preset(Game& game);
-void delete_pill_preset(Game& game);

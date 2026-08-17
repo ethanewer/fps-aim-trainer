@@ -23,6 +23,7 @@ static bool self_test_check(bool condition, const char* message) {
 
 int run_self_test() {
     bool ok = true;
+    g_live_default_tasks = false;
 
     ok = self_test_check(std::string(glyph('[')[0]) != "00000" && std::string(glyph(']')[0]) != "00000", "menu font draws unit brackets") && ok;
 
@@ -40,38 +41,51 @@ int run_self_test() {
     };
 
     const char* default_wall_order[] = {
-        "1W3T DYNAMIC",
-        "1W3TS DYNAMIC",
-        "1W6T STRAFE",
-        "1W6TS STRAFE",
-        "1W6TES STRAFE",
+        "1W2T DYNAMIC",
+        "1W2TS DYNAMIC",
+        "1W2T STRAFE",
+        "1W2TS STRAFE",
         "1W2T STATIC",
-        "1W4TS STATIC",
-        "1W8TES STATIC",
-        "1W16T STATIC",
+        "1W2TS STATIC",
+        "1W2TES STATIC",
+        "1W4T DYNAMIC CLOSE",
+        "1W4TS DYNAMIC CLOSE",
+        "1W4T STRAFE CLOSE",
+        "1W4TS STRAFE CLOSE",
+        "1W4TES STRAFE CLOSE",
+        "1W4T STATIC CLOSE",
+        "1W4TS STATIC CLOSE",
+        "1W4TES STATIC CLOSE",
     };
-    ok = self_test_check(static_cast<int>(game.wall_presets.size()) >= 9, "default wall preset list includes new clicking presets") && ok;
-    for (int i = 0; i < 9 && i < static_cast<int>(game.wall_presets.size()); ++i) {
+    const int default_wall_count = static_cast<int>(sizeof(default_wall_order) / sizeof(default_wall_order[0]));
+    ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking presets") && ok;
+    for (int i = 0; i < default_wall_count && i < static_cast<int>(game.wall_presets.size()); ++i) {
         ok = self_test_check(game.wall_presets[i].name == default_wall_order[i], "default wall presets are in sensible order") && ok;
     }
-    int dynamic_index = find_wall_preset(game, "1W3T DYNAMIC");
-    int dynamic_small_index = find_wall_preset(game, "1W3TS DYNAMIC");
-    int strafe_extra_index = find_wall_preset(game, "1W6TES STRAFE");
-    int static_two_index = find_wall_preset(game, "1W2T STATIC");
-    int static_extra_index = find_wall_preset(game, "1W8TES STATIC");
-    int static_sixteen_index = find_wall_preset(game, "1W16T STATIC");
-    ok = self_test_check(dynamic_index >= 0 && game.wall_presets[dynamic_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[dynamic_index].settings.radius_min - 0.08f) < 0.0001f, "dynamic default uses 1W3T settings") && ok;
+    int dynamic_index = find_wall_preset(game, "1W2T DYNAMIC");
+    int dynamic_small_index = find_wall_preset(game, "1W2TS DYNAMIC");
+    int strafe_small_index = find_wall_preset(game, "1W2TS STRAFE");
+    int static_index = find_wall_preset(game, "1W2T STATIC");
+    int static_extra_index = find_wall_preset(game, "1W2TES STATIC");
+    int close_index = find_wall_preset(game, "1W4T DYNAMIC CLOSE");
+    ok = self_test_check(dynamic_index >= 0 && game.wall_presets[dynamic_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[dynamic_index].settings.radius_min - 0.08f) < 0.0001f && std::fabs(game.wall_presets[dynamic_index].settings.horizontal_speed_max - 1.5f) < 0.0001f && std::fabs(game.wall_presets[dynamic_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "dynamic default uses 1W2T settings") && ok;
     ok = self_test_check(dynamic_small_index >= 0 && std::fabs(game.wall_presets[dynamic_small_index].settings.radius_min - 0.04f) < 0.0001f, "dynamic small default uses small target size") && ok;
-    ok = self_test_check(strafe_extra_index >= 0 && game.wall_presets[strafe_extra_index].settings.target_count_min == 6 && std::fabs(game.wall_presets[strafe_extra_index].settings.radius_min - 0.02f) < 0.0001f, "strafe extra-small default uses extra-small targets") && ok;
-    ok = self_test_check(static_two_index >= 0 && game.wall_presets[static_two_index].settings.target_count_min == 2 && game.wall_presets[static_two_index].settings.horizontal_speed_max == 0.0f, "static 1W2T default is non-moving") && ok;
-    ok = self_test_check(static_extra_index >= 0 && game.wall_presets[static_extra_index].settings.target_count_min == 8 && std::fabs(game.wall_presets[static_extra_index].settings.radius_min - 0.02f) < 0.0001f && game.wall_presets[static_extra_index].settings.horizontal_speed_max == 0.0f, "static 1W8TES default is non-moving extra-small") && ok;
-    ok = self_test_check(static_sixteen_index >= 0 && game.wall_presets[static_sixteen_index].settings.target_count_min == 16 && std::fabs(game.wall_presets[static_sixteen_index].settings.radius_min - 0.08f) < 0.0001f && game.wall_presets[static_sixteen_index].settings.horizontal_speed_max == 0.0f, "static 1W16T default is non-moving") && ok;
+    ok = self_test_check(strafe_small_index >= 0 && game.wall_presets[strafe_small_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[strafe_small_index].settings.radius_min - 0.04f) < 0.0001f && std::fabs(game.wall_presets[strafe_small_index].settings.horizontal_speed_min - 1.0f) < 0.0001f && std::fabs(game.wall_presets[strafe_small_index].settings.change_max - 4.0f) < 0.0001f, "strafe small default uses small targets") && ok;
+    ok = self_test_check(static_index >= 0 && game.wall_presets[static_index].settings.target_count_min == 2 && game.wall_presets[static_index].settings.horizontal_speed_max == 0.0f, "static 1W2T default is non-moving") && ok;
+    ok = self_test_check(static_extra_index >= 0 && game.wall_presets[static_extra_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[static_extra_index].settings.radius_min - 0.02f) < 0.0001f && game.wall_presets[static_extra_index].settings.horizontal_speed_max == 0.0f, "static 1W2TES default is non-moving extra-small") && ok;
+    ok = self_test_check(close_index >= 0 && std::fabs(game.wall_presets[close_index].settings.wall_distance_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[close_index].settings.wall_distance_max - 5.0f) < 0.0001f, "close default uses a 4-5m wall range") && ok;
+    for (const WallPreset& preset : game.wall_presets) {
+        bool close_wall = preset.name.size() >= 6 && preset.name.compare(preset.name.size() - 6, 6, " CLOSE") == 0;
+        float expected_min = close_wall ? 4.0f : 8.0f;
+        float expected_max = close_wall ? 5.0f : 10.0f;
+        ok = self_test_check(std::fabs(preset.settings.wall_distance_min - expected_min) < 0.0001f && std::fabs(preset.settings.wall_distance_max - expected_max) < 0.0001f, "default wall presets use mid 8-10m or close 4-5m ranges") && ok;
+    }
 
     Game preset_order;
     preset_order.wall_presets = {
         {"CUSTOM", WallClickSettings{}},
         {"1W6T STRAFE", WallClickSettings{}},
-        {"1W4T DYNAMIC", WallClickSettings{}},
+        {"1W2T DYNAMIC", WallClickSettings{}},
     };
     preset_order.selected_wall_preset = 2;
     preset_order.wall_presets[1].settings.radius_min = 0.12f;
@@ -79,10 +93,10 @@ int run_self_test() {
     preset_order.wall_presets[2].settings.radius_min = 0.13f;
     preset_order.wall_presets[2].settings.radius_max = 0.13f;
     ensure_presets(preset_order);
-    ok = self_test_check(preset_order.wall_presets[0].name == "1W3T DYNAMIC" && preset_order.wall_presets[1].name == "1W3TS DYNAMIC" && preset_order.wall_presets[2].name == "1W6T STRAFE", "existing built-in wall presets are reordered with defaults") && ok;
-    ok = self_test_check(preset_order.wall_presets.back().name == "CUSTOM", "custom wall presets remain after built-in defaults") && ok;
-    ok = self_test_check(std::fabs(preset_order.wall_presets[2].settings.radius_min - 0.12f) < 0.0001f, "reordering preserves existing strafe preset settings") && ok;
-    ok = self_test_check(preset_order.wall_presets[preset_order.selected_wall_preset].name == "1W3T DYNAMIC" && preset_order.wall_presets[preset_order.selected_wall_preset].settings.target_count_min == 3 && std::fabs(preset_order.wall_presets[preset_order.selected_wall_preset].settings.radius_min - 0.13f) < 0.0001f, "reordering migrates and preserves selected built-in preset settings") && ok;
+    ok = self_test_check(preset_order.wall_presets[0].name == "1W2T DYNAMIC" && preset_order.wall_presets[1].name == "1W2TS DYNAMIC", "existing built-in wall presets are reordered with defaults") && ok;
+    ok = self_test_check(static_cast<int>(preset_order.wall_presets.size()) >= 3 && preset_order.wall_presets[preset_order.wall_presets.size() - 2].name == "CUSTOM" && preset_order.wall_presets.back().name == "1W6T STRAFE", "custom and unknown wall presets remain after built-in defaults") && ok;
+    ok = self_test_check(std::fabs(preset_order.wall_presets[find_wall_preset(preset_order, "1W6T STRAFE")].settings.radius_min - 0.12f) < 0.0001f, "reordering preserves existing strafe preset settings") && ok;
+    ok = self_test_check(preset_order.wall_presets[preset_order.selected_wall_preset].name == "1W2T DYNAMIC" && preset_order.wall_presets[preset_order.selected_wall_preset].settings.target_count_min == 3 && std::fabs(preset_order.wall_presets[preset_order.selected_wall_preset].settings.radius_min - 0.13f) < 0.0001f, "reordering preserves selected built-in preset settings") && ok;
 
     // Name field editing through the draft-based text-box model.
     menu_focus_field(game, FieldId::WallName);
@@ -149,13 +163,24 @@ int run_self_test() {
     Input tab_fwd;
     tab_fwd.tab_pressed = true;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::WallDistMin, "tab advances to the next field") && ok;
+    ok = self_test_check(game.active_field == FieldId::WallHealth, "tab advances from name to health") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::WallDistMin, "tab advances from health to distance") && ok;
     Input tab_back;
     tab_back.tab_pressed = true;
     tab_back.shift_down = true;
     menu_handle_edit(game, tab_back);
-    ok = self_test_check(game.active_field == FieldId::WallName, "shift+tab moves to the previous field") && ok;
+    ok = self_test_check(game.active_field == FieldId::WallHealth, "shift+tab returns to health") && ok;
+    menu_handle_edit(game, tab_back);
+    ok = self_test_check(game.active_field == FieldId::WallName, "shift+tab returns to the name") && ok;
     menu_blur_field(game);
+
+    game.wall_settings.target_health = 2000;
+    normalize_settings(game);
+    ok = self_test_check(game.wall_settings.target_health == WALL_TARGET_HEALTH_MAX, "target health clamps to the maximum") && ok;
+    game.wall_settings.target_health = -4;
+    normalize_settings(game);
+    ok = self_test_check(game.wall_settings.target_health == 0, "target health clamps below zero to infinite") && ok;
 
     game.wall_settings.radius_min = 0.09f;
     game.wall_settings.radius_max = 0.20f;
@@ -221,29 +246,62 @@ int run_self_test() {
     game.selected_wall_preset = 0;
     game.active_field = FieldId::WallName;
     delete_wall_preset(game);
-    ok = self_test_check(!game.wall_presets.empty() && game.wall_presets[0].name == "1W3T DYNAMIC" && find_wall_preset(game, "1W8TES STATIC") >= 0, "deleting the last wall preset restores default wall presets") && ok;
+    ok = self_test_check(!game.wall_presets.empty() && game.wall_presets[0].name == "1W2T DYNAMIC" && find_wall_preset(game, "1W2TES STATIC") >= 0, "deleting the last wall preset restores default wall presets") && ok;
     ok = self_test_check(game.active_field == FieldId::None, "delete wall preset exits text edit mode") && ok;
 
-    game.pill_preset_name.clear();
-    menu_focus_field(game, FieldId::PillName);
-    Input pill_input;
-    pill_input.text_input = "fast pill";
-    menu_handle_edit(game, pill_input);
-    ok = self_test_check(game.edit_draft == "FAST PILL", "pill preset name edit filters and uppercases") && ok;
-    int old_pill_count = static_cast<int>(game.pill_presets.size());
-    new_pill_preset(game);
-    ok = self_test_check(static_cast<int>(game.pill_presets.size()) == old_pill_count + 1, "new pill preset appends exactly one preset") && ok;
-    ok = self_test_check(game.active_field == FieldId::None, "new pill preset exits text edit mode") && ok;
+    {
+        Game reset_test;
+        reset_test.wall_presets = {
+            {"CUSTOM", WallClickSettings{}},
+            {"1W3T DYNAMIC", WallClickSettings{}},
+        };
+        reset_test.wall_presets[1].settings.radius_min = 0.22f;
+        reset_test.wall_presets[1].settings.radius_max = 0.22f;
+        reset_test.selected_wall_preset = 1;
+        reset_test.wall_preset_scroll = 1;
+        reset_test.active_field = FieldId::WallName;
+        reset_wall_presets(reset_test);
+        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 15 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
+        ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W2T DYNAMIC", "reset tasks selects the first default task") && ok;
+        ok = self_test_check(std::fabs(reset_test.wall_settings.radius_min - 0.08f) < 0.0001f && std::fabs(reset_test.wall_settings.horizontal_speed_max - 1.5f) < 0.0001f, "reset tasks restores compiled default settings") && ok;
+        ok = self_test_check(reset_test.active_field == FieldId::None, "reset tasks exits text edit mode") && ok;
+    }
 
-    game.pill_presets = {{"SELECTED PILL", PillTrackingSettings{}}, {"BOTTOM PILL", PillTrackingSettings{}}};
-    game.selected_pill_preset = 0;
-    game.pill_presets[0].settings.width = 0.55f;
-    game.pill_presets[0].settings.speed = 0.75f;
-    game.pill_presets[1].settings.width = 1.75f;
-    game.pill_presets[1].settings.speed = 2.25f;
-    game.pill_settings = game.pill_presets[0].settings;
-    new_pill_preset(game);
-    ok = self_test_check(std::fabs(game.pill_settings.width - 0.55f) < 0.0001f && std::fabs(game.pill_settings.speed - 0.75f) < 0.0001f, "new pill preset copies selected settings instead of bottom row") && ok;
+    {
+        std::ofstream dump("build/self-test-live.dump");
+        dump << "task \"LIVE RESET\" 4 4 4 5 0.08 0.08 7.5 7.5 0 0 0 0 0 0 0 7\n";
+        dump.close();
+        g_default_tasks_dump_override = "build/self-test-live.dump";
+        g_live_default_tasks = true;
+        Game live;
+        live.wall_presets = {{"CUSTOM", WallClickSettings{}}};
+        reset_wall_presets(live);
+        ensure_presets(live);
+        ok = self_test_check(live.wall_presets.size() == 1 && live.wall_preset_name == "LIVE RESET", "reset tasks loads dumped default tasks") && ok;
+        ok = self_test_check(find_wall_preset(live, "1W2T DYNAMIC") < 0 && find_wall_preset(live, "1W4T DYNAMIC") < 0, "reset tasks does not re-inject compiled defaults after a live dump") && ok;
+        ok = self_test_check(live.wall_settings.target_count_min == 4 && live.wall_settings.target_health == 7, "reset tasks applies dumped target count and health") && ok;
+        ok = self_test_check(std::fabs(live.wall_settings.wall_distance_min - 4.0f) < 0.0001f && std::fabs(live.wall_settings.horizontal_speed_min - 7.5f) < 0.0001f, "reset tasks applies dumped wall and speed values") && ok;
+        g_default_tasks_dump_override.clear();
+        g_live_default_tasks = false;
+        std::remove("build/self-test-live.dump");
+    }
+
+    {
+        std::ofstream script("build/self-test-live-tasks.py");
+        script << "print('task \"PY RESET\" 2 2 12 15 0.04 0.04 1 2 0 0 4 4 1 4 1 0')\n";
+        script.close();
+        g_live_default_tasks = true;
+        g_default_tasks_script_override = "build/self-test-live-tasks.py";
+        Game py;
+        reset_wall_presets(py);
+        ensure_presets(py);
+        ok = self_test_check(py.wall_presets.size() == 1 && py.wall_preset_name == "PY RESET", "reset tasks re-runs a python default-tasks script") && ok;
+        ok = self_test_check(py.wall_settings.task_mode == TaskMode::Tracking && py.wall_settings.target_health == 0, "reset tasks applies python mode and health") && ok;
+        ok = self_test_check(std::fabs(py.wall_settings.wall_distance_max - 15.0f) < 0.0001f, "reset tasks applies python wall range") && ok;
+        g_default_tasks_script_override.clear();
+        g_live_default_tasks = false;
+        std::remove("build/self-test-live-tasks.py");
+    }
 
     // Creating a preset must scroll it into the 7-row visible window.
     {
@@ -260,9 +318,7 @@ int run_self_test() {
     g_settings_path_override = "build/self-test-settings.cfg";
     std::remove(g_settings_path_override.c_str());
     game.wall_presets = {{"1W3T DYNAMIC", WallClickSettings{}}, {"1W6T STRAFE", WallClickSettings{}}};
-    game.pill_presets = {{"SMOOTH PILL", PillTrackingSettings{}}, {"REACTIVE PILL", PillTrackingSettings{}}};
     game.selected_wall_preset = 0;
-    game.selected_pill_preset = 0;
     apply_selected_presets(game);
     game.wall_preset_name = "TINY PASU";
     game.wall_settings.target_count_min = 8;
@@ -288,6 +344,7 @@ int run_self_test() {
     ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count range loads") && ok;
     ok = self_test_check(std::fabs(loaded.wall_settings.wall_distance_min - 6.25f) < 0.0001f, "selected wall distance loads") && ok;
     ok = self_test_check(std::fabs(loaded.wall_settings.radius_max - 0.22f) < 0.0001f, "selected wall preset radius range loads") && ok;
+    ok = self_test_check(loaded.wall_settings.task_mode == TaskMode::Clicking && loaded.wall_settings.target_health == 1, "saved wall presets default to clicking with one-shot health") && ok;
 
     game.selected_wall_preset = 1;
     apply_selected_presets(game);
@@ -349,50 +406,90 @@ int run_self_test() {
     }
     Game actual_v2_loaded;
     load_settings(actual_v2_loaded);
-    ok = self_test_check(actual_v2_loaded.wall_preset_name == "1W3T DYNAMIC", "actual v2 selected wall preset migrates to 1W3T") && ok;
-    ok = self_test_check(actual_v2_loaded.wall_settings.target_count_min == 3 && actual_v2_loaded.wall_settings.target_count_max == 3, "actual v2 dynamic wall target count migrates to 1W3T") && ok;
+    ok = self_test_check(actual_v2_loaded.wall_preset_name == "1W4T DYNAMIC", "actual v2 selected wall preset keeps 1W4T") && ok;
+    ok = self_test_check(actual_v2_loaded.wall_settings.target_count_min == 4 && actual_v2_loaded.wall_settings.target_count_max == 4, "actual v2 dynamic wall target count stays 1W4T") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.radius_min) - 0.24f) < 0.001f, "actual v2 wall radius preserves old internal size") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 wall horizontal speed preserves old internal speed") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.vertical_speed_min) - 2.0f) < 0.001f, "actual v2 wall vertical speed preserves old internal speed") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_loaded.wall_settings.acceleration_min) - 20.0f) < 0.001f, "actual v2 wall acceleration preserves old internal acceleration") && ok;
-    ok = self_test_check(std::fabs(wall_z_from_distance(actual_v2_loaded.wall_settings.wall_distance_max) - ROOM_WALL_Z) < 0.001f, "actual v2 wall distance defaults to old wall plane") && ok;
-    ok = self_test_check(actual_v2_loaded.pill_preset_name == "SMOOTH PILL", "actual v2 selected pill preset remains selected") && ok;
-    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.width) - 1.24f) < 0.001f, "actual v2 pill width preserves old internal size") && ok;
-    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.speed) - 4.0f) < 0.001f, "actual v2 pill speed preserves old internal speed") && ok;
-    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.acceleration) - 12.0f) < 0.001f, "actual v2 pill acceleration preserves old internal acceleration") && ok;
-    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.distance_min) - 7.5f) < 0.001f && std::fabs(tracking_to_units(actual_v2_loaded.pill_settings.distance_max) - 10.5f) < 0.001f, "actual v2 pill distance defaults preserve old spawn band") && ok;
+    ok = self_test_check(std::fabs(actual_v2_loaded.wall_settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(actual_v2_loaded.wall_settings.wall_distance_max - 10.0f) < 0.0001f, "actual v2 built-in wall distance migrates to 8-10m") && ok;
+    ok = self_test_check(actual_v2_loaded.wall_settings.task_mode == TaskMode::Clicking && actual_v2_loaded.wall_settings.target_health == 1, "actual v2 wall presets migrate to clicking with one-shot health") && ok;
     save_settings(actual_v2_loaded);
     Game actual_v2_roundtrip;
     load_settings(actual_v2_roundtrip);
-    ok = self_test_check(actual_v2_roundtrip.wall_preset_name == "1W3T DYNAMIC" && actual_v2_roundtrip.pill_preset_name == "SMOOTH PILL", "actual v2 save round trip preserves selected presets") && ok;
+    ok = self_test_check(actual_v2_roundtrip.wall_preset_name == "1W4T DYNAMIC", "actual v2 save round trip preserves selected wall preset") && ok;
     ok = self_test_check(std::fabs(wall_to_units(actual_v2_roundtrip.wall_settings.radius_min) - 0.24f) < 0.001f && std::fabs(wall_to_units(actual_v2_roundtrip.wall_settings.horizontal_speed_min) - 6.0f) < 0.001f, "actual v2 save round trip preserves wall behavior") && ok;
-    ok = self_test_check(std::fabs(tracking_to_units(actual_v2_roundtrip.pill_settings.width) - 1.24f) < 0.001f && std::fabs(tracking_to_units(actual_v2_roundtrip.pill_settings.speed) - 4.0f) < 0.001f, "actual v2 save round trip preserves pill behavior") && ok;
 
     {
-        std::ofstream high_accel("build/self-test-settings.cfg");
-        high_accel << "version 2\n";
-        high_accel << "pill_preset \"HIGH ACCEL\" 1.24 4 80 0.35 2.4\n";
+        std::ofstream v7("build/self-test-settings.cfg");
+        v7 << "version 7\n";
+        v7 << "selected_wall 0\n";
+        v7 << "wall_preset \"TRACK MIGRATE\" 3 3 6 7.5 0.08 0.08 1 1.5 0 0.75 5 5 0.75 1.5\n";
+        v7 << "pill_preset \"SMOOTH PILL\" 1.13 6.8 9.55 3.64 10.91 0.35 2.4\n";
     }
-    Game high_accel_loaded;
-    load_settings(high_accel_loaded);
-    ok = self_test_check(std::fabs(tracking_to_units(high_accel_loaded.pill_settings.acceleration) - 80.0f) < 0.001f, "old high pill acceleration is preserved on load") && ok;
-    save_settings(high_accel_loaded);
-    Game high_accel_roundtrip;
-    load_settings(high_accel_roundtrip);
-    ok = self_test_check(std::fabs(tracking_to_units(high_accel_roundtrip.pill_settings.acceleration) - 80.0f) < 0.001f, "old high pill acceleration is preserved after save round trip") && ok;
+    Game v7_loaded;
+    load_settings(v7_loaded);
+    ok = self_test_check(v7_loaded.wall_preset_name == "TRACK MIGRATE", "v7 wall preset name loads after pill removal") && ok;
+    ok = self_test_check(v7_loaded.wall_settings.task_mode == TaskMode::Clicking && v7_loaded.wall_settings.target_health == 1, "v7 wall presets migrate to clicking with one-shot health") && ok;
 
     {
-        std::ofstream high_speed("build/self-test-settings.cfg");
-        high_speed << "version 2\n";
-        high_speed << "pill_preset \"HIGH SPEED\" 1.24 14 12 0.35 2.4\n";
+        std::ofstream v8("build/self-test-settings.cfg");
+        v8 << "version 8\n";
+        v8 << "selected_wall 0\n";
+        v8 << "wall_preset \"WALL TRACK\" 2 2 6 7.5 0.08 0.08 1 1.5 0 0.75 5 5 0.75 1.5 1 20\n";
     }
-    Game high_speed_loaded;
-    load_settings(high_speed_loaded);
-    ok = self_test_check(std::fabs(tracking_to_units(high_speed_loaded.pill_settings.speed) - 14.0f) < 0.001f, "old high pill speed is preserved on load") && ok;
-    save_settings(high_speed_loaded);
-    Game high_speed_roundtrip;
-    load_settings(high_speed_roundtrip);
-    ok = self_test_check(std::fabs(tracking_to_units(high_speed_roundtrip.pill_settings.speed) - 14.0f) < 0.001f, "old high pill speed is preserved after save round trip") && ok;
+    Game v8_loaded;
+    load_settings(v8_loaded);
+    ok = self_test_check(v8_loaded.wall_preset_name == "WALL TRACK", "v8 tracking wall preset name loads") && ok;
+    ok = self_test_check(v8_loaded.wall_settings.task_mode == TaskMode::Tracking && v8_loaded.wall_settings.target_health == 20, "v8 wall preset task mode and health load") && ok;
+    save_settings(v8_loaded);
+    Game v8_roundtrip;
+    load_settings(v8_roundtrip);
+    ok = self_test_check(v8_roundtrip.wall_settings.task_mode == TaskMode::Tracking && v8_roundtrip.wall_settings.target_health == 20, "v8 save round trip preserves tracking mode and health") && ok;
+
+    {
+        std::ofstream v8_click("build/self-test-settings.cfg");
+        v8_click << "version 8\n";
+        v8_click << "selected_wall 0\n";
+        v8_click << "wall_preset \"OLD CLICK\" 3 3 6 7.5 0.08 0.08 1 1.5 0 0.75 5 5 0.75 1.5 0 0\n";
+    }
+    Game v8_click_loaded;
+    load_settings(v8_click_loaded);
+    ok = self_test_check(v8_click_loaded.wall_settings.task_mode == TaskMode::Clicking && v8_click_loaded.wall_settings.target_health == 1, "v8 clicking health 0 migrates to one-shot") && ok;
+
+    {
+        std::ofstream v9("build/self-test-settings.cfg");
+        v9 << "version 9\n";
+        v9 << "selected_wall 0\n";
+        v9 << "wall_preset \"CLICK INF\" 3 3 6 7.5 0.08 0.08 1 1.5 0 0.75 5 5 0.75 1.5 0 0\n";
+    }
+    Game v9_loaded;
+    load_settings(v9_loaded);
+    ok = self_test_check(v9_loaded.wall_settings.task_mode == TaskMode::Clicking && v9_loaded.wall_settings.target_health == 0, "v9 clicking health 0 stays infinite") && ok;
+
+    {
+        std::ofstream v9_builtin("build/self-test-settings.cfg");
+        v9_builtin << "version 9\n";
+        v9_builtin << "selected_wall 0\n";
+        v9_builtin << "wall_preset \"1W6T STRAFE\" 6 6 6 7.5 0.08 0.08 0.75 1.25 0 0 4 4 1 2.5 0 1\n";
+        v9_builtin << "wall_preset \"MY CUSTOM\" 2 2 6 7.5 0.08 0.08 0 0 0 0 0 0 0 0 0 1\n";
+    }
+    Game v9_builtin_loaded;
+    load_settings(v9_builtin_loaded);
+    int strafe_loaded = find_wall_preset(v9_builtin_loaded, "1W6T STRAFE");
+    int custom_loaded = find_wall_preset(v9_builtin_loaded, "MY CUSTOM");
+    ok = self_test_check(strafe_loaded >= 0 && std::fabs(v9_builtin_loaded.wall_presets[strafe_loaded].settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(v9_builtin_loaded.wall_presets[strafe_loaded].settings.wall_distance_max - 10.0f) < 0.0001f, "v9 built-in wall range migrates to 8-10m") && ok;
+    ok = self_test_check(custom_loaded >= 0 && std::fabs(v9_builtin_loaded.wall_presets[custom_loaded].settings.wall_distance_min - 6.0f) < 0.0001f && std::fabs(v9_builtin_loaded.wall_presets[custom_loaded].settings.wall_distance_max - 7.5f) < 0.0001f, "v9 custom wall range is left unchanged") && ok;
+
+    {
+        std::ofstream v10("build/self-test-settings.cfg");
+        v10 << "version 10\n";
+        v10 << "selected_wall 0\n";
+        v10 << "wall_preset \"1W6T STRAFE\" 6 6 5 6 0.08 0.08 0.75 1.25 0 0 4 4 1 2.5 0 1\n";
+    }
+    Game v10_loaded;
+    load_settings(v10_loaded);
+    ok = self_test_check(std::fabs(v10_loaded.wall_settings.wall_distance_min - 5.0f) < 0.0001f && std::fabs(v10_loaded.wall_settings.wall_distance_max - 6.0f) < 0.0001f, "v10 built-in wall range is not rewritten") && ok;
     std::remove(g_settings_path_override.c_str());
     g_settings_path_override.clear();
 
@@ -724,133 +821,6 @@ int run_self_test() {
     );
     ok = self_test_check(scene_far_plane(wall_far_plane_test) > wall_required_far, "far wall distance stays inside far clipping plane") && ok;
 
-    Game pill_distance_test;
-    pill_distance_test.rng.seed(321);
-    init_scenarios(pill_distance_test);
-    pill_distance_test.scenario = pill_distance_test.scenarios[1];
-    pill_distance_test.pill_settings.distance_min = 4.0f;
-    pill_distance_test.pill_settings.distance_max = 8.0f;
-    normalize_settings(pill_distance_test);
-    float pill_room_limit = tracking_room_half_size(pill_distance_test.pill_settings) - tracking_to_units(1.0f) - tracking_to_units(pill_distance_test.pill_settings.width) * 0.5f;
-    ok = self_test_check(pill_room_limit >= tracking_to_units(pill_distance_test.pill_settings.distance_max) - 0.001f, "tracking room boundary allows configured max pill distance") && ok;
-    ok = self_test_check(tracking_room_half_size(pill_distance_test.pill_settings) * 2.0f >= tracking_to_units(8.0f) * TRACKING_ROOM_SIDE_SCALE - 0.001f, "tracking room side length scales from max pill distance") && ok;
-    Game close_room_test;
-    close_room_test.pill_settings.distance_min = 1.5f;
-    close_room_test.pill_settings.distance_max = 4.0f;
-    normalize_settings(close_room_test);
-    float close_room_limit = tracking_room_half_size(close_room_test.pill_settings) - tracking_to_units(1.0f) - tracking_to_units(close_room_test.pill_settings.width) * 0.5f;
-    ok = self_test_check(close_room_limit >= tracking_to_units(close_room_test.pill_settings.distance_max) - 0.001f, "close tracking room boundary allows configured max pill distance") && ok;
-    ok = self_test_check(scene_far_plane(pill_distance_test) >= 120.0f, "tracking far plane remains at least the default range") && ok;
-    bool saw_near_pill_spawn = false;
-    bool saw_far_pill_spawn = false;
-    for (int i = 0; i < 80; ++i) {
-        Target target = spawn_pill_target(pill_distance_test);
-        float dist_m = units_to_tracking_meters(std::sqrt(target.pos.x * target.pos.x + target.pos.z * target.pos.z));
-        ok = self_test_check(dist_m >= 4.0f && dist_m <= 8.0f, "pill spawn distance stays within configured range") && ok;
-        saw_near_pill_spawn = saw_near_pill_spawn || dist_m < 5.0f;
-        saw_far_pill_spawn = saw_far_pill_spawn || dist_m > 7.0f;
-    }
-    ok = self_test_check(saw_near_pill_spawn && saw_far_pill_spawn, "pill spawn samples across configured distance range") && ok;
-    Vec3 outside_pos{tracking_to_units(8.2f), PLANE_EYE_HEIGHT, 0.0f};
-    Vec3 outside_vel = pill_desired_velocity_for_position(pill_distance_test, outside_pos);
-    ok = self_test_check(dot(outside_vel, {outside_pos.x, 0.0f, outside_pos.z}) < 0.0f, "pill direction near max distance points inward") && ok;
-    Vec3 inside_pos{tracking_to_units(3.9f), PLANE_EYE_HEIGHT, 0.0f};
-    Vec3 inside_vel = pill_desired_velocity_for_position(pill_distance_test, inside_pos);
-    ok = self_test_check(dot(inside_vel, {inside_pos.x, 0.0f, inside_pos.z}) > 0.0f, "pill direction near min distance points outward") && ok;
-
-    Game narrow_band_test;
-    narrow_band_test.rng.seed(44);
-    narrow_band_test.pill_settings.distance_min = 4.0f;
-    narrow_band_test.pill_settings.distance_max = 4.0f;
-    normalize_settings(narrow_band_test);
-    Vec3 narrow_outer_pos{tracking_to_units(4.05f), PLANE_EYE_HEIGHT, 0.0f};
-    Vec3 narrow_outer_vel = pill_desired_velocity_for_position(narrow_band_test, narrow_outer_pos);
-    ok = self_test_check(dot(narrow_outer_vel, {narrow_outer_pos.x, 0.0f, narrow_outer_pos.z}) < 0.0f, "narrow pill band steers inward outside fixed radius") && ok;
-    Vec3 narrow_inner_pos{tracking_to_units(3.95f), PLANE_EYE_HEIGHT, 0.0f};
-    Vec3 narrow_inner_vel = pill_desired_velocity_for_position(narrow_band_test, narrow_inner_pos);
-    ok = self_test_check(dot(narrow_inner_vel, {narrow_inner_pos.x, 0.0f, narrow_inner_pos.z}) > 0.0f, "narrow pill band steers outward inside fixed radius") && ok;
-    Vec3 narrow_exact_pos{tracking_to_units(4.0f), PLANE_EYE_HEIGHT, 0.0f};
-    Vec3 narrow_exact_vel = pill_desired_velocity_for_position(narrow_band_test, narrow_exact_pos);
-    ok = self_test_check(std::fabs(dot(narrow_exact_vel, {narrow_exact_pos.x, 0.0f, narrow_exact_pos.z})) < 0.001f, "fixed-radius pill band chooses tangential movement at boundary") && ok;
-
-    Game close_distance_test;
-    close_distance_test.pill_settings.distance_min = 1.5f;
-    close_distance_test.pill_settings.distance_max = 4.0f;
-    close_distance_test.pill_settings.speed = 0.5f;
-    close_distance_test.pill_settings.acceleration = 20.0f;
-    normalize_settings(close_distance_test);
-    close_distance_test.targets.push_back({
-        {tracking_to_units(1.6f), PLANE_EYE_HEIGHT, 0.0f},
-        {-tracking_to_units(0.4f), 0.0f, 0.0f},
-        {-tracking_to_units(0.4f), 0.0f, 0.0f},
-        10.0f,
-        tracking_to_units(close_distance_test.pill_settings.width) * 0.5f
-    });
-    update_pill_target(close_distance_test, 1.0f / 120.0f);
-    ok = self_test_check(close_distance_test.targets[0].vel.x < 0.0f, "pill close distance uses configured min without hidden camera bounce") && ok;
-
-    Game radial_max_test;
-    radial_max_test.pill_settings.distance_min = 2.0f;
-    radial_max_test.pill_settings.distance_max = 4.0f;
-    radial_max_test.pill_settings.speed = 4.0f;
-    radial_max_test.pill_settings.acceleration = 0.05f;
-    normalize_settings(radial_max_test);
-    radial_max_test.targets.push_back({
-        {tracking_to_units(3.98f), PLANE_EYE_HEIGHT, 0.0f},
-        {tracking_to_units(2.0f), 0.0f, 0.0f},
-        {tracking_to_units(2.0f), 0.0f, 0.0f},
-        10.0f,
-        tracking_to_units(radial_max_test.pill_settings.width) * 0.5f
-    });
-    update_pill_target(radial_max_test, 1.0f);
-    Vec3 radial_max_after{radial_max_test.targets[0].pos.x, 0.0f, radial_max_test.targets[0].pos.z};
-    float radial_max_dist = units_to_tracking_meters(length(radial_max_after));
-    ok = self_test_check(
-        radial_max_dist <= 4.001f &&
-            dot(radial_max_test.targets[0].vel, radial_max_after) <= 0.001f &&
-            length(radial_max_test.targets[0].vel) > 0.0001f,
-        "pill cannot drift past configured max distance or stop there under low acceleration"
-    ) && ok;
-
-    Game radial_min_test;
-    radial_min_test.pill_settings.distance_min = 2.0f;
-    radial_min_test.pill_settings.distance_max = 4.0f;
-    radial_min_test.pill_settings.speed = 4.0f;
-    radial_min_test.pill_settings.acceleration = 0.05f;
-    normalize_settings(radial_min_test);
-    radial_min_test.targets.push_back({
-        {tracking_to_units(2.02f), PLANE_EYE_HEIGHT, 0.0f},
-        {-tracking_to_units(2.0f), 0.0f, 0.0f},
-        {-tracking_to_units(2.0f), 0.0f, 0.0f},
-        10.0f,
-        tracking_to_units(radial_min_test.pill_settings.width) * 0.5f
-    });
-    update_pill_target(radial_min_test, 1.0f);
-    float radial_min_dist = units_to_tracking_meters(std::sqrt(radial_min_test.targets[0].pos.x * radial_min_test.targets[0].pos.x + radial_min_test.targets[0].pos.z * radial_min_test.targets[0].pos.z));
-    ok = self_test_check(radial_min_dist >= 1.999f && radial_min_test.targets[0].vel.x >= -0.001f, "pill cannot drift inside configured min distance under low acceleration") && ok;
-
-    Game radial_steer_test;
-    radial_steer_test.rng.seed(987);
-    radial_steer_test.pill_settings.distance_min = 2.0f;
-    radial_steer_test.pill_settings.distance_max = 4.0f;
-    radial_steer_test.pill_settings.speed = 2.0f;
-    radial_steer_test.pill_settings.acceleration = 0.0f;
-    normalize_settings(radial_steer_test);
-    radial_steer_test.targets.push_back({
-        {tracking_to_units(3.85f), PLANE_EYE_HEIGHT, 0.0f},
-        {tracking_to_units(2.0f), 0.0f, 0.0f},
-        {tracking_to_units(2.0f), 0.0f, 0.0f},
-        10.0f,
-        tracking_to_units(radial_steer_test.pill_settings.width) * 0.5f
-    });
-    update_pill_target(radial_steer_test, 1.0f / 120.0f);
-    Vec3 radial_after{radial_steer_test.targets[0].pos.x, 0.0f, radial_steer_test.targets[0].pos.z};
-    ok = self_test_check(
-        dot(radial_steer_test.targets[0].vel, radial_after) <= 0.001f &&
-            dot(radial_steer_test.targets[0].desired_vel, radial_after) <= 0.001f,
-        "pill redirects inward near the configured outer radius before clamp contact"
-    ) && ok;
-
     Game count_sampling;
     count_sampling.rng.seed(789);
     bool saw_count_3 = false;
@@ -923,6 +893,142 @@ int run_self_test() {
     update_playing(hit_sound_test, hit_click, 1.0f / 120.0f);
     ok = self_test_check(hit_sound_test.stats.hits == 1 && hit_sound_test.pending_hit_sounds == 1, "wall hit queues one hit sound event") && ok;
 
+
+    // Tracking health: 0 is infinite; a positive value respawns after that many hits.
+    {
+        Game health_inf;
+        init_scenarios(health_inf);
+        health_inf.wall_settings.task_mode = TaskMode::Tracking;
+        health_inf.wall_settings.target_health = 0;
+        health_inf.wall_settings.target_count_min = 1;
+        health_inf.wall_settings.target_count_max = 1;
+        health_inf.wall_settings.horizontal_speed_min = 0.0f;
+        health_inf.wall_settings.horizontal_speed_max = 0.0f;
+        health_inf.wall_settings.vertical_speed_min = 0.0f;
+        health_inf.wall_settings.vertical_speed_max = 0.0f;
+        normalize_settings(health_inf);
+        start_scenario(health_inf, health_inf.scenarios[0], RunMode::Challenge);
+        float dist = health_inf.wall_settings.wall_distance_max;
+        health_inf.targets = {{
+            {0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(dist) + 0.45f},
+            {0.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 0.0f},
+            1000.0f,
+            wall_to_units(health_inf.wall_settings.radius_min),
+            0.0f,
+            dist,
+            0,
+        }};
+        Vec3 start_pos = health_inf.targets[0].pos;
+        Input none;
+        for (int i = 0; i < 60; ++i) {
+            update_playing(health_inf, none, 1.0f / TRACKING_FIRE_HZ);
+        }
+        ok = self_test_check(health_inf.stats.hits >= 50 && health_inf.targets.size() == 1, "infinite tracking health keeps scoring hits") && ok;
+        ok = self_test_check(std::fabs(health_inf.targets[0].pos.x - start_pos.x) < 0.0001f && std::fabs(health_inf.targets[0].pos.y - start_pos.y) < 0.0001f, "infinite tracking health does not respawn the target") && ok;
+
+        Game health_finite;
+        init_scenarios(health_finite);
+        health_finite.wall_settings.task_mode = TaskMode::Tracking;
+        health_finite.wall_settings.target_health = 3;
+        health_finite.wall_settings.target_count_min = 1;
+        health_finite.wall_settings.target_count_max = 1;
+        health_finite.wall_settings.horizontal_speed_min = 0.0f;
+        health_finite.wall_settings.horizontal_speed_max = 0.0f;
+        health_finite.wall_settings.vertical_speed_min = 0.0f;
+        health_finite.wall_settings.vertical_speed_max = 0.0f;
+        health_finite.wall_settings.radius_min = 0.4f;
+        health_finite.wall_settings.radius_max = 0.4f;
+        normalize_settings(health_finite);
+        start_scenario(health_finite, health_finite.scenarios[0], RunMode::Challenge);
+        dist = health_finite.wall_settings.wall_distance_max;
+        health_finite.targets = {{
+            {0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(dist) + 0.45f},
+            {0.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 0.0f},
+            1000.0f,
+            wall_to_units(0.4f),
+            0.0f,
+            dist,
+            3,
+        }};
+        Vec3 first_pos = health_finite.targets[0].pos;
+        for (int i = 0; i < 2; ++i) {
+            update_playing(health_finite, none, 1.0f / TRACKING_FIRE_HZ);
+        }
+        ok = self_test_check(health_finite.targets[0].health == 1 && std::fabs(health_finite.targets[0].pos.x - first_pos.x) < 0.0001f, "finite tracking health survives until depleted") && ok;
+        update_playing(health_finite, none, 1.0f / TRACKING_FIRE_HZ);
+        ok = self_test_check(health_finite.targets.size() == 1 && health_finite.targets[0].health == 3, "finite tracking health respawns at full health") && ok;
+    }
+
+    // Clicking health: 1 is one-shot; N requires N clicks; 0 never despawns.
+    {
+        auto place_click_target = [](Game& g, int health) {
+            float dist = g.wall_settings.wall_distance_max;
+            g.targets = {{
+                {0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(dist) + 0.45f},
+                {0.0f, 0.0f, 0.0f},
+                {0.0f, 0.0f, 0.0f},
+                1000.0f,
+                wall_to_units(g.wall_settings.radius_min),
+                0.0f,
+                dist,
+                health,
+            }};
+        };
+
+        Game click_hp;
+        init_scenarios(click_hp);
+        click_hp.wall_settings.task_mode = TaskMode::Clicking;
+        click_hp.wall_settings.target_health = 3;
+        click_hp.wall_settings.target_count_min = 1;
+        click_hp.wall_settings.target_count_max = 1;
+        click_hp.wall_settings.horizontal_speed_min = 0.0f;
+        click_hp.wall_settings.horizontal_speed_max = 0.0f;
+        click_hp.wall_settings.vertical_speed_min = 0.0f;
+        click_hp.wall_settings.vertical_speed_max = 0.0f;
+        click_hp.wall_settings.radius_min = 0.4f;
+        click_hp.wall_settings.radius_max = 0.4f;
+        normalize_settings(click_hp);
+        start_scenario(click_hp, click_hp.scenarios[0], RunMode::Practice);
+        place_click_target(click_hp, 3);
+        Vec3 click_pos = click_hp.targets[0].pos;
+        Input click;
+        click.left_pressed = true;
+        Input idle;
+        update_playing(click_hp, click, 1.0f / 120.0f);
+        update_playing(click_hp, idle, 1.0f / 120.0f);
+        update_playing(click_hp, click, 1.0f / 120.0f);
+        ok = self_test_check(click_hp.stats.hits == 2 && click_hp.targets[0].health == 1, "clicking health survives until depleted") && ok;
+        ok = self_test_check(std::fabs(click_hp.targets[0].pos.x - click_pos.x) < 0.0001f && std::fabs(click_hp.targets[0].pos.y - click_pos.y) < 0.0001f, "clicking health does not respawn before the last shot") && ok;
+        update_playing(click_hp, idle, 1.0f / 120.0f);
+        update_playing(click_hp, click, 1.0f / 120.0f);
+        ok = self_test_check(click_hp.targets.size() == 1 && click_hp.targets[0].health == 3, "clicking health respawns at full health") && ok;
+
+        Game click_inf;
+        init_scenarios(click_inf);
+        click_inf.wall_settings.task_mode = TaskMode::Clicking;
+        click_inf.wall_settings.target_health = 0;
+        click_inf.wall_settings.target_count_min = 1;
+        click_inf.wall_settings.target_count_max = 1;
+        click_inf.wall_settings.horizontal_speed_min = 0.0f;
+        click_inf.wall_settings.horizontal_speed_max = 0.0f;
+        click_inf.wall_settings.vertical_speed_min = 0.0f;
+        click_inf.wall_settings.vertical_speed_max = 0.0f;
+        click_inf.wall_settings.radius_min = 0.4f;
+        click_inf.wall_settings.radius_max = 0.4f;
+        normalize_settings(click_inf);
+        start_scenario(click_inf, click_inf.scenarios[0], RunMode::Practice);
+        place_click_target(click_inf, 0);
+        Vec3 inf_pos = click_inf.targets[0].pos;
+        for (int i = 0; i < 8; ++i) {
+            update_playing(click_inf, click, 1.0f / 120.0f);
+            update_playing(click_inf, idle, 1.0f / 120.0f);
+        }
+        ok = self_test_check(click_inf.stats.hits == 8 && click_inf.targets.size() == 1, "infinite clicking health keeps scoring hits") && ok;
+        ok = self_test_check(std::fabs(click_inf.targets[0].pos.x - inf_pos.x) < 0.0001f && std::fabs(click_inf.targets[0].pos.y - inf_pos.y) < 0.0001f, "infinite clicking health does not respawn the target") && ok;
+    }
+
     // Challenge mode + run persistence.
     {
         g_runs_path_override = "build/self-test-runs.cfg";
@@ -931,8 +1037,10 @@ int run_self_test() {
         Game ch;
         ch.rng.seed(99);
         init_scenarios(ch);
-        ch.pill_preset_name = "TEST PILL";
-        start_scenario(ch, ch.scenarios[1], RunMode::Challenge);
+        ch.wall_preset_name = "TEST TRACK";
+        ch.wall_settings.task_mode = TaskMode::Tracking;
+        ch.wall_settings.target_health = 0;
+        start_scenario(ch, ch.scenarios[0], RunMode::Challenge);
         ok = self_test_check(ch.run_mode == RunMode::Challenge && std::fabs(ch.challenge_time_left - CHALLENGE_DURATION_SEC) < 0.0001f, "challenge starts with the full time budget") && ok;
 
         Input none;
@@ -949,21 +1057,22 @@ int run_self_test() {
         ok = self_test_check(ch.last_run.score == ch.stats.hits, "challenge score equals hits") && ok;
         float expected_acc = ch.stats.shots > 0 ? static_cast<float>(ch.stats.hits) / static_cast<float>(ch.stats.shots) * 100.0f : 0.0f;
         ok = self_test_check(std::fabs(ch.last_run.accuracy - expected_acc) < 0.001f, "challenge records accuracy separately from the score") && ok;
-        ok = self_test_check(ch.last_run.kind == ScenarioKind::PillTracking && ch.last_run.preset_name == "TEST PILL", "run records scenario kind and preset name") && ok;
+        ok = self_test_check(ch.last_run.kind == ScenarioKind::Tracking && ch.last_run.preset_name == "TEST TRACK", "run records scenario kind and preset name") && ok;
         ok = self_test_check(static_cast<int>(ch.runs.size()) == 1, "finished challenge is appended to the run history") && ok;
 
-        ok = self_test_check(best_run_score(ch, ScenarioKind::PillTracking, "TEST PILL") == ch.last_run.score, "best_run_score returns the recorded score") && ok;
-        ok = self_test_check(best_run_score(ch, ScenarioKind::WallClick, "TEST PILL") == -1, "best_run_score is -1 for an unplayed scenario") && ok;
+        ok = self_test_check(best_run_score(ch, ScenarioKind::Tracking, "TEST TRACK") == ch.last_run.score, "best_run_score returns the recorded score") && ok;
+        ok = self_test_check(best_run_score(ch, ScenarioKind::WallClick, "TEST TRACK") == -1, "best_run_score is -1 for an unplayed scenario") && ok;
 
         Game reloaded;
         load_runs(reloaded);
         ok = self_test_check(static_cast<int>(reloaded.runs.size()) == 1, "saved runs reload from disk") && ok;
-        ok = self_test_check(reloaded.runs[0].kind == ScenarioKind::PillTracking && reloaded.runs[0].preset_name == "TEST PILL" && reloaded.runs[0].score == ch.last_run.score, "reloaded run preserves kind, preset, and score") && ok;
+        ok = self_test_check(reloaded.runs[0].kind == ScenarioKind::Tracking && reloaded.runs[0].preset_name == "TEST TRACK" && reloaded.runs[0].score == ch.last_run.score, "reloaded run preserves kind, preset, and score") && ok;
 
         Game pr;
         pr.rng.seed(7);
         init_scenarios(pr);
-        start_scenario(pr, pr.scenarios[1], RunMode::Practice);
+        pr.wall_settings.task_mode = TaskMode::Tracking;
+        start_scenario(pr, pr.scenarios[0], RunMode::Practice);
         for (int i = 0; i < 240; ++i) {
             update_playing(pr, none, 1.0f / 120.0f);
         }
