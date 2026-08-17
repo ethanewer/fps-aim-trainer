@@ -685,7 +685,6 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
     text(max_x + 10.0f, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "0 = inf", 1.5f, 150, 162, 178);
     row_y += pitch;
 
-    divider(cl, row_y - 2.0f, EDITOR_W - 28.0f);
     draw_column_headers(min_x, max_x, box_w, row_y + 4.0f);
     row_y += 18.0f;
 
