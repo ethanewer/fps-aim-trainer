@@ -5,6 +5,7 @@
 
 // Target motion sampling.
 Vec3 wall_desired_velocity(Game& game);
+float wall_sample_acceleration(Game& game);
 float wall_change_timer(Game& game);
 
 // Target spawning.

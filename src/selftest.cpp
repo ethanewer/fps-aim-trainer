@@ -802,6 +802,54 @@ int run_self_test() {
     ok = self_test_check(varied_radius, "wall target sizes vary when radius min and max differ") && ok;
     ok = self_test_check(varied_accel, "wall target acceleration varies when acceleration min and max differ") && ok;
 
+    Game accel_reroll;
+    accel_reroll.rng.seed(789);
+    accel_reroll.wall_settings.radius_min = 0.08f;
+    accel_reroll.wall_settings.radius_max = 0.08f;
+    accel_reroll.wall_settings.horizontal_speed_min = 1.0f;
+    accel_reroll.wall_settings.horizontal_speed_max = 1.0f;
+    accel_reroll.wall_settings.vertical_speed_min = 0.0f;
+    accel_reroll.wall_settings.vertical_speed_max = 0.0f;
+    accel_reroll.wall_settings.acceleration_min = 5.0f;
+    accel_reroll.wall_settings.acceleration_max = 15.0f;
+    accel_reroll.wall_settings.change_min = 0.01f;
+    accel_reroll.wall_settings.change_max = 0.01f;
+    normalize_settings(accel_reroll);
+    accel_reroll.targets.push_back(spawn_wall_target(accel_reroll));
+    float first_live_accel = units_to_wall_meters(accel_reroll.targets[0].acceleration);
+    bool varied_live_accel = false;
+    for (int i = 0; i < 80; ++i) {
+        accel_reroll.targets[0].change_timer = 0.0f;
+        update_wall_targets(accel_reroll, 1.0f / 120.0f);
+        float accel_m = units_to_wall_meters(accel_reroll.targets[0].acceleration);
+        ok = self_test_check(accel_m >= 5.0f && accel_m <= 15.0f, "direction-change acceleration stays within range") && ok;
+        varied_live_accel = varied_live_accel || std::fabs(accel_m - first_live_accel) > 0.001f;
+    }
+    ok = self_test_check(varied_live_accel, "direction change re-samples acceleration when min and max differ") && ok;
+
+    Game fixed_accel;
+    fixed_accel.rng.seed(790);
+    fixed_accel.wall_settings.radius_min = 0.08f;
+    fixed_accel.wall_settings.radius_max = 0.08f;
+    fixed_accel.wall_settings.horizontal_speed_min = 1.0f;
+    fixed_accel.wall_settings.horizontal_speed_max = 1.5f;
+    fixed_accel.wall_settings.vertical_speed_min = 0.0f;
+    fixed_accel.wall_settings.vertical_speed_max = 0.75f;
+    fixed_accel.wall_settings.acceleration_min = 8.0f;
+    fixed_accel.wall_settings.acceleration_max = 8.0f;
+    fixed_accel.wall_settings.change_min = 0.01f;
+    fixed_accel.wall_settings.change_max = 0.01f;
+    normalize_settings(fixed_accel);
+    fixed_accel.targets.push_back(spawn_wall_target(fixed_accel));
+    for (int i = 0; i < 40; ++i) {
+        fixed_accel.targets[0].change_timer = 0.0f;
+        update_wall_targets(fixed_accel, 1.0f / 120.0f);
+        ok = self_test_check(std::fabs(units_to_wall_meters(fixed_accel.targets[0].acceleration) - 8.0f) < 0.0001f, "fixed acceleration is unchanged across direction changes") && ok;
+    }
+    for (const WallPreset& preset : game.wall_presets) {
+        ok = self_test_check(std::fabs(preset.settings.acceleration_min - preset.settings.acceleration_max) < 0.0001f, "default wall presets keep acceleration non-random") && ok;
+    }
+
     Game distance_test;
     distance_test.wall_settings.wall_distance_max = 4.0f;
     float near_wall_z = wall_z_from_distance(distance_test.wall_settings.wall_distance_max);

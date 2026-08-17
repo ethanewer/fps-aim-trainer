@@ -25,6 +25,10 @@ Vec3 wall_desired_velocity(Game& game) {
     };
 }
 
+float wall_sample_acceleration(Game& game) {
+    return wall_to_units(rand_wall_range(game, game.wall_settings.acceleration_min, game.wall_settings.acceleration_max));
+}
+
 float wall_change_timer(Game& game) {
     if (game.wall_settings.change_max <= 0.0f) {
         return 1.0e9f;
@@ -106,7 +110,7 @@ Target spawn_wall_target(Game& game, int skip_index) {
         }
     }
     Vec3 desired = wall_desired_velocity(game);
-    float acceleration = wall_to_units(rand_wall_range(game, game.wall_settings.acceleration_min, game.wall_settings.acceleration_max));
+    float acceleration = wall_sample_acceleration(game);
     int health = game.wall_settings.target_health;
     return {pos, desired, desired, wall_change_timer(game), radius, acceleration, distance, health};
 }
@@ -301,6 +305,7 @@ void update_wall_targets(Game& game, float dt) {
             target.change_timer -= step_dt;
             if (target.change_timer <= 0.0f) {
                 target.desired_vel = wall_desired_velocity(game);
+                target.acceleration = wall_sample_acceleration(game);
                 target.change_timer = wall_change_timer(game);
             }
             steer_wall_target_from_bounds(game, target);

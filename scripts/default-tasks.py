@@ -224,23 +224,17 @@ def task_from_json(item: dict) -> Task:
 # Built-in clicking tasks. Add tracking with mode=Mode.TRACKING.
 # Mid wall is the default. Close/far append CLOSE or FAR to the name:
 #   Task(size=Size.NORMAL, targets=4, movement=Movement.DYNAMIC, wall=Wall.CLOSE)
-DEFAULT_TASKS = [
-    Task(size=Size.NORMAL, targets=2, movement=Movement.DYNAMIC),
-    Task(size=Size.SMALL, targets=2, movement=Movement.DYNAMIC),
-    Task(size=Size.NORMAL, targets=2, movement=Movement.STRAFING),
-    Task(size=Size.SMALL, targets=2, movement=Movement.STRAFING),
-    Task(size=Size.NORMAL, targets=2, movement=Movement.STATIC),
-    Task(size=Size.SMALL, targets=2, movement=Movement.STATIC),
-    Task(size=Size.EXTRA_SMALL, targets=2, movement=Movement.STATIC),
-    Task(size=Size.NORMAL, targets=4, movement=Movement.DYNAMIC, wall=Wall.CLOSE),
-    Task(size=Size.SMALL, targets=4, movement=Movement.DYNAMIC, wall=Wall.CLOSE),
-    Task(size=Size.NORMAL, targets=4, movement=Movement.STRAFING, wall=Wall.CLOSE),
-    Task(size=Size.SMALL, targets=4, movement=Movement.STRAFING, wall=Wall.CLOSE),
-    Task(size=Size.EXTRA_SMALL, targets=4, movement=Movement.STRAFING, wall=Wall.CLOSE),
-    Task(size=Size.NORMAL, targets=4, movement=Movement.STATIC, wall=Wall.CLOSE),
-    Task(size=Size.SMALL, targets=4, movement=Movement.STATIC, wall=Wall.CLOSE),
-    Task(size=Size.EXTRA_SMALL, targets=4, movement=Movement.STATIC, wall=Wall.CLOSE),
-]
+DEFAULT_TASKS = []
+
+for wall in [Wall.MID, Wall.CLOSE]:
+    for movement in [Movement.DYNAMIC, Movement.STRAFING, Movement.STATIC]:
+        for size in [Size.NORMAL, Size.SMALL, Size.EXTRA_SMALL]:
+            if wall == Wall.MID and movement != Movement.STATIC and size == Size.EXTRA_SMALL:
+                continue
+            if movement == Movement.DYNAMIC and size == Size.EXTRA_SMALL:
+                continue
+            targets = 2 if wall == Wall.MID else 4
+            DEFAULT_TASKS.append(Task(size=size, targets=targets, movement=movement, wall=wall))
 
 
 def _assert_names() -> None:
