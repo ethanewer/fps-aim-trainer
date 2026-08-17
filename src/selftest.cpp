@@ -163,7 +163,9 @@ int run_self_test() {
     Input tab_fwd;
     tab_fwd.tab_pressed = true;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::WallHealth, "tab advances from name to health") && ok;
+    ok = self_test_check(game.active_field == FieldId::WallTargetsMin, "tab advances from name to target count") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::WallHealth, "tab advances from target count to health") && ok;
     menu_handle_edit(game, tab_fwd);
     ok = self_test_check(game.active_field == FieldId::WallDistMin, "tab advances from health to distance") && ok;
     Input tab_back;
@@ -172,7 +174,18 @@ int run_self_test() {
     menu_handle_edit(game, tab_back);
     ok = self_test_check(game.active_field == FieldId::WallHealth, "shift+tab returns to health") && ok;
     menu_handle_edit(game, tab_back);
+    ok = self_test_check(game.active_field == FieldId::WallTargetsMin, "shift+tab returns to target count") && ok;
+    menu_handle_edit(game, tab_back);
     ok = self_test_check(game.active_field == FieldId::WallName, "shift+tab returns to the name") && ok;
+    menu_blur_field(game);
+
+    game.wall_settings.target_count_min = 3;
+    game.wall_settings.target_count_max = 8;
+    normalize_settings(game);
+    ok = self_test_check(game.wall_settings.target_count_min == 3 && game.wall_settings.target_count_max == 3, "target count is a single value") && ok;
+    menu_focus_field(game, FieldId::WallDistMax);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::WallRadiusMin, "tab advances from wall max to radius") && ok;
     menu_blur_field(game);
 
     game.wall_settings.target_health = 2000;
@@ -341,7 +354,7 @@ int run_self_test() {
     ok = self_test_check(loaded.wall_color.r == 44 && loaded.wall_color.g == 55 && loaded.wall_color.b == 66, "saved wall color loads") && ok;
     ok = self_test_check(!loaded.wall_presets.empty(), "saved wall presets load") && ok;
     ok = self_test_check(loaded.wall_preset_name == "TINY PASU", "selected named wall preset loads into editor") && ok;
-    ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count range loads") && ok;
+    ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count loads") && ok;
     ok = self_test_check(std::fabs(loaded.wall_settings.wall_distance_min - 6.25f) < 0.0001f, "selected wall distance loads") && ok;
     ok = self_test_check(std::fabs(loaded.wall_settings.radius_max - 0.22f) < 0.0001f, "selected wall preset radius range loads") && ok;
     ok = self_test_check(loaded.wall_settings.task_mode == TaskMode::Clicking && loaded.wall_settings.target_health == 1, "saved wall presets default to clicking with one-shot health") && ok;

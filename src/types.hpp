@@ -36,11 +36,10 @@ enum class FieldId {
     None,
     // Tasks tab
     WallName,
+    WallTargetsMin,
     WallHealth,
     WallDistMin,
     WallDistMax,
-    WallTargetsMin,
-    WallTargetsMax,
     WallRadiusMin,
     WallRadiusMax,
     WallHSpeedMin,

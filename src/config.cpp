@@ -42,14 +42,6 @@ static void normalize_float_range(float& low, float& high, float min_allowed, fl
     }
 }
 
-static void normalize_int_range(int& low, int& high, int min_allowed, int max_allowed) {
-    low = std::max(min_allowed, std::min(low, max_allowed));
-    high = std::max(min_allowed, std::min(high, max_allowed));
-    if (high < low) {
-        high = low;
-    }
-}
-
 std::string sanitize_preset_name(const std::string& raw) {
     std::string name;
     for (char c : raw) {
@@ -93,7 +85,8 @@ static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
     normalize_float_range(settings.wall_distance_min, settings.wall_distance_max, 2.0f, 30.0f);
     normalize_float_range(settings.radius_min, settings.radius_max, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M);
     int capacity = wall_capacity_for_radius(settings.radius_max, settings.wall_distance_max);
-    normalize_int_range(settings.target_count_min, settings.target_count_max, 1, capacity);
+    settings.target_count_min = std::max(1, std::min(settings.target_count_min, capacity));
+    settings.target_count_max = settings.target_count_min;
     normalize_float_range(settings.horizontal_speed_min, settings.horizontal_speed_max, 0.0f, 8.0f);
     normalize_float_range(settings.vertical_speed_min, settings.vertical_speed_max, 0.0f, 8.0f);
     normalize_float_range(settings.acceleration_min, settings.acceleration_max, 0.0f, 40.0f);

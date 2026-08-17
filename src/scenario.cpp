@@ -126,7 +126,7 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     game.stats = {};
     game.yaw = 0.0f;
     game.pitch = 0.0f;
-    int count = rand_wall_int_range(game, game.wall_settings.target_count_min, game.wall_settings.target_count_max);
+    int count = game.wall_settings.target_count_min;
     for (int i = 0; i < count; ++i) {
         game.targets.push_back(spawn_wall_target(game));
     }

@@ -67,7 +67,6 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::WallDistMin: return f_float(&g.wall_settings.wall_distance_min, 2.0f, 30.0f, 2);
         case FieldId::WallDistMax: return f_float(&g.wall_settings.wall_distance_max, 2.0f, 30.0f, 2);
         case FieldId::WallTargetsMin: return f_int(&g.wall_settings.target_count_min, 1, capacity);
-        case FieldId::WallTargetsMax: return f_int(&g.wall_settings.target_count_max, 1, capacity);
         case FieldId::WallRadiusMin: return f_float(&g.wall_settings.radius_min, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M, 2);
         case FieldId::WallRadiusMax: return f_float(&g.wall_settings.radius_max, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M, 2);
         case FieldId::WallHSpeedMin: return f_float(&g.wall_settings.horizontal_speed_min, 0.0f, 8.0f, 2);
@@ -166,9 +165,8 @@ void menu_cancel_edit(Game& g) {
 }
 
 static const FieldId WALL_ORDER[] = {
-    FieldId::WallName, FieldId::WallHealth,
+    FieldId::WallName, FieldId::WallTargetsMin, FieldId::WallHealth,
     FieldId::WallDistMin, FieldId::WallDistMax,
-    FieldId::WallTargetsMin, FieldId::WallTargetsMax,
     FieldId::WallRadiusMin, FieldId::WallRadiusMax,
     FieldId::WallHSpeedMin, FieldId::WallHSpeedMax,
     FieldId::WallVSpeedMin, FieldId::WallVSpeedMax,
@@ -570,11 +568,11 @@ static void draw_editor_header(Game& g, const Input& in, float x, const std::str
 }
 
 static void draw_column_headers(float min_x, float max_x, float box_w, float y) {
-    // Right-align headers to the same edge as the right-aligned box values.
+    const float scale = 1.5f;
     std::string mn = "MIN";
-    text(min_x + box_w - 12.0f - text_width(mn, 1.5f), y, mn, 1.5f, 150, 162, 178);
     std::string mx = "MAX";
-    text(max_x + box_w - 12.0f - text_width(mx, 1.5f), y, mx, 1.5f, 150, 162, 178);
+    text(min_x + (box_w - text_width(mn, scale)) * 0.5f, y, mn, scale, 150, 162, 178);
+    text(max_x + (box_w - text_width(mx, scale)) * 0.5f, y, mx, scale, 150, 162, 178);
 }
 
 static void draw_footer_hint(float x) {
@@ -591,36 +589,41 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
     draw_editor_header(g, in, x, tracking ? "WALL TRACKING" : "WALL CLICKING", FieldId::WallName, kind);
 
     float cl = x + 16.0f;
-    float min_x = cl + 272.0f;
-    float max_x = cl + 408.0f;
-    float box_w = 116.0f;
+    float inner_right = cl + EDITOR_W - 32.0f;
+    const float label_w = 200.0f;
+    const float col_gap = 14.0f;
+    float min_x = cl + label_w;
+    float box_w = (inner_right - min_x - col_gap) * 0.5f;
+    float max_x = min_x + box_w + col_gap;
     float box_h = 30.0f;
+    const float pitch = 34.0f;
 
-    float row_y = CARD_Y + 108.0f;
-    const float pitch = 32.0f;
+    float row_y = CARD_Y + 106.0f;
     field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "TASK");
-    float task_x = cl + 78.0f;
-    float task_w = 120.0f;
-    if (toggle_button(in, task_x, row_y, task_w, box_h, "CLICKING", !tracking)) {
+    if (toggle_button(in, min_x, row_y, box_w, box_h, "CLICKING", !tracking)) {
         menu_blur_field(g);
         g.wall_settings.task_mode = TaskMode::Clicking;
     }
-    if (toggle_button(in, task_x + task_w + 8.0f, row_y, task_w, box_h, "TRACKING", tracking)) {
+    if (toggle_button(in, max_x, row_y, box_w, box_h, "TRACKING", tracking)) {
         menu_blur_field(g);
         g.wall_settings.task_mode = TaskMode::Tracking;
     }
     row_y += pitch;
 
+    field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "TARGETS");
+    value_box(g, in, FieldId::WallTargetsMin, min_x, row_y, box_w, box_h);
+    row_y += pitch;
+
     field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "HEALTH");
     value_box(g, in, FieldId::WallHealth, min_x, row_y, box_w, box_h);
-    text(min_x + box_w + 12.0f, row_y + (box_h - GLYPH_H) * 0.5f, "0 INF", 1.7f, 150, 162, 178);
+    text(max_x + 12.0f, row_y + (box_h - GLYPH_H) * 0.5f, "0 INF", 1.7f, 150, 162, 178);
+    row_y += pitch;
 
-    divider(cl, CARD_Y + 176.0f, EDITOR_W - 32.0f);
-    draw_column_headers(min_x, max_x, box_w, CARD_Y + 184.0f);
-    row_y = CARD_Y + 200.0f;
+    divider(cl, row_y - 2.0f, EDITOR_W - 32.0f);
+    draw_column_headers(min_x, max_x, box_w, row_y + 6.0f);
+    row_y += 22.0f;
 
     row_range(g, in, cl, min_x, max_x, row_y, "WALL [M]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "TARGETS", FieldId::WallTargetsMin, FieldId::WallTargetsMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "RADIUS [M]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "H SPEED [M/S]", FieldId::WallHSpeedMin, FieldId::WallHSpeedMax, box_w, box_h); row_y += pitch;
     row_range(g, in, cl, min_x, max_x, row_y, "V SPEED [M/S]", FieldId::WallVSpeedMin, FieldId::WallVSpeedMax, box_w, box_h); row_y += pitch;
