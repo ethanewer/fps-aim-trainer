@@ -19,6 +19,7 @@ inline constexpr float WALL_TARGET_RADIUS_MIN_M = 0.01f;
 inline constexpr float WALL_TARGET_RADIUS_MAX_M = 0.45f;
 inline constexpr int WALL_TARGET_HEALTH_MAX = 999;
 inline constexpr int PRESET_NAME_MAX = 32;
+inline constexpr int VISIBLE_PRESET_ROWS = 8;
 // Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
 // a fixed rate so tracking quality becomes a discrete hit count.
 inline constexpr float CHALLENGE_DURATION_SEC = 60.0f;
@@ -36,6 +37,7 @@ enum class RunMode { Practice, Challenge };
 enum class FieldId {
     None,
     // Tasks tab
+    PresetSearch,
     WallName,
     WallTargetsMin,
     WallHealth,
@@ -187,6 +189,7 @@ struct Game {
     int selected_wall_preset = 0;
     int wall_preset_scroll = 0;
     std::string wall_preset_name = "1W2T DYNAMIC";
+    std::string preset_search;
     MenuTab menu_tab = MenuTab::Clicking;
     // Text-box editing state. `active_field` is the focused box (None = idle);
     // `edit_draft` is the raw text being typed; `edit_fresh` is true right after

@@ -7,7 +7,9 @@ Guidance for AI agents (and humans) working in this repository. Read this before
 **Aim Trainer** — a lightweight native FPS aim-trainer prototype.
 
 - **Language / stack:** C++17, SDL2, fixed-function OpenGL (2.1-era calls only). No external
-  engine or UI toolkit — everything (3D scene, bitmap font, menu, HUD) is drawn by hand.
+  engine or UI toolkit — the 3D scene, menu, and HUD are drawn by hand. UI text uses a
+  system monospace TrueType font (Consolas on Windows, Menlo on macOS, DejaVu Sans Mono
+  on Linux), rasterized with `stb_truetype`.
 - **Platforms:** macOS is primary (SDL2 from Homebrew). Linux and Windows are supported by the
   same source; see `README.md` for per-platform build notes.
 - **What it does:** wall tasks in a 3D room, each of which can be `CLICKING` or `TRACKING`.
@@ -23,7 +25,7 @@ Guidance for AI agents (and humans) working in this repository. Read this before
   `%APPDATA%\aim_trainer.cfg` (Windows). `load_settings` migrates older file formats;
   the self-test guards those migrations.
 - **Challenge run history** persists separately to `~/.aim_trainer_runs.cfg` via
-  `save_runs`/`load_runs`; `best_run_score` powers the `BEST` readout in the menu and results.
+  `save_runs`/`load_runs`; `best_run_score` powers the `Best` readout in the menu and results.
 
 ## Source layout
 
@@ -39,7 +41,9 @@ downward (upper modules may include lower ones, not vice-versa):
 | `src/default_tasks.inc` | Generated default-task table (from `scripts/default-tasks.py`). |
 | `data/default-tasks.json` | Human-readable default-task definitions. |
 | `src/scenario.{hpp,cpp}` | Target spawning, movement physics, and scenario simulation. |
-| `src/render.{hpp,cpp}` | Bitmap font + glyphs, 2D primitives, 3D world, in-scenario HUD. |
+| `src/render.{hpp,cpp}` | 2D primitives, 3D world, in-scenario HUD. |
+| `src/font.cpp` | System monospace UI font (stb_truetype atlas). |
+| `third_party/stb_truetype.h` | Vendored TrueType rasterizer (public domain). |
 | `src/menu.{hpp,cpp}` | The text-box settings menu and its editing state machine. |
 | `src/selftest.cpp` | The headless `--self-test` suite. |
 | `src/main.cpp` | SDL setup, the main loop, and the debug/screenshot CLI modes. |
@@ -141,7 +145,7 @@ every menu or rendering change.
 #   tab:   0=TASKS  1=GENERAL
 #   state: 0=default  1=empty-name editing  2=long-name editing
 #          3=long preset list (scrolled)  4=max-range stress  5=focused numeric box
-#          6=tracking mode selected
+#          6=tracking mode selected  7=task search (strafe)
 ./build/aim-trainer --debug-menu /tmp/menu.bmp 1920 1080 0 0
 
 # Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=clicking, 1=tracking)
@@ -170,13 +174,15 @@ alignment, overflow, and focus highlighting.
 
 ## Conventions & gotchas
 
-- **Bitmap font is UPPERCASE-ONLY** with a limited charset: `0-9 A-Z` and `. - + : / % _ ( ) [ ]`.
-  There is **no lowercase, comma, `>`, `?`, or arrow glyph** (see `glyph()` in `render.cpp`). Any
-  string drawn in the menu/HUD must use only these; write units as `[M]`, `[M/S]`, `[M/S2]`,
-  `[SEC]`, `[PX]`.
+- **UI font is a system monospace TTF** covering printable ASCII (`32–126`), including
+  mixed case, commas, and `=`. Units can be written as `[m]`, `[m/s]`, `[m/s2]`, `[s]`,
+  `[px]`. Rasterization lives in `src/font.cpp`; `text_height(scale)` is the em box used
+  for vertical centering. If no system font is found, the self-test fails.
 - **Menu coordinates:** the menu is authored on a virtual ~1040×720 canvas, uniformly scaled by
   `menu_scale` and vertically centered by `voff`. Mouse input is inverse-transformed by the same
   factors in `draw_menu` — if you change the draw transform, change the mouse transform to match.
+  The Tasks sidebar search box is `FieldId::PresetSearch`; it filters presets by case-insensitive
+  substring and is first in the Tasks tab order.
 - **Editing model:** each editable box is a `FieldId`; the focused field's text lives in
   `game.edit_draft` and is committed to the real value on blur/Enter/Tab/focus-change. Numeric
   fields fresh-replace on the first keystroke; names sanitize on commit. `field_desc()` in
@@ -203,13 +209,13 @@ alignment, overflow, and focus highlighting.
   Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`;
   switching names include `SWITCHING` and the health value; tracking names include
   `TRACKING`.
-  Edit `scripts/default-tasks.py` and click **RESET TASKS** to re-run that script and
+  Edit `scripts/default-tasks.py` and click **Reset tasks** to re-run that script and
   replace every saved preset. The dumped list becomes the live builtin table for that
   session, so target-count edits (which change preset names) are not overwritten by the
   compiled `default_tasks.inc` table. Run `python scripts/default-tasks.py` (add `--from-json`
   if you edited the JSON) when you want to refresh `src/default_tasks.inc` for the next compile.
-- **Don't commit build artifacts.** `build/`, `target/`, and `debug-shots/` are gitignored; keep
-  them out of commits. Do commit `data/default-tasks.json` and `src/default_tasks.inc` after
+- **Don't commit build artifacts.** `build/`, `target/`, `debug-shots/`, and Python `__pycache__/`
+  are gitignored; keep them out of commits. Do commit `data/default-tasks.json` and `src/default_tasks.inc` after
   regenerating defaults. The repo tracks source, `Makefile`, `README.md`, docs, and that task table.
 - **Git:** branch off `main` before committing; keep commits focused. Run the self-test and a
   warning-clean build before committing.

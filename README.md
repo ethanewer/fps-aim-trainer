@@ -18,12 +18,13 @@ In the menu:
 - Every setting is a text box. Click a box (or press `TAB`) to focus it, then type the value.
   The first keystroke replaces the shown number; backspace edits it.
 - `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
-- Each task can be `CLICKING` or `TRACKING`. Both modes have a `HEALTH` setting (`1` = one shot, `N` = N hits, `0` = infinite).
-- `RESET TASKS` replaces every saved task with the list in `scripts/default-tasks.py`.
-- `PRACTICE` starts an endless run; `CHALLENGE` starts a timed 60-second run.
+- The Tasks sidebar has a search box that filters presets by name as you type.
+- Each task can be clicking or tracking. Both modes have a Health setting (`1` = one shot, `N` = N hits, `0` = infinite).
+- **Reset tasks** replaces every saved task with the list in `scripts/default-tasks.py`.
+- **Practice** starts an endless run; **Challenge** starts a timed 60-second run.
   Clicking an already-selected preset in the list also starts a challenge.
-- `NEW` copies the current selected/editor values in that tab.
-- `SAVE PRESET` / `SAVE GENERAL` persist settings. General settings include
+- **New** copies the current selected/editor values in that tab.
+- **Save preset** / **Save general** persist settings. General settings include
   sensitivity, crosshair, target color, and wall color.
 - Esc on the menu (with nothing being edited) quits.
 
@@ -34,7 +35,7 @@ In the menu:
   each on-target moment counts as a hit.
 - Accuracy (`hits / shots`) is recorded but is not part of the score.
 - Every run is saved locally to `~/.aim_trainer_runs.cfg` (time, score, accuracy, shots, ...).
-  The results screen shows the run and your best, and the menu shows `BEST` per preset.
+  The results screen shows the run and your best, and the menu shows **Best** per preset.
 - `ESC` aborts a run without recording it.
 
 ## Sensitivity Mapping
@@ -103,7 +104,7 @@ This installs/refreshes `Aim Trainer Dev`, which uses the same launcher, so doub
 
 - Wall tasks: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), a fixed target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Each direction change re-samples speed and acceleration from their min/max ranges. Set both speed values to `0` for static targets. Distance only changes room depth along the starting view axis; wall width/height stay fixed, so farther targets occupy a smaller angular spawn area. A tracking task with one target and infinite health spawns that target at the center of the spawn rectangle; clicking and target-switching keep random spawns.
 - Each wall task can be clicking or tracking. Tracking auto-fires at 20 Hz in challenge mode (score = hits). Target health is how many hits destroy a target in either mode (`1` = one shot, `N` = N hits, `0` = infinite / never despawns). Clicking with health `0` is click-tracking: every click on the target scores, but the target stays.
-- Default presets come from `scripts/default-tasks.py`. A default task is size, wall (`close` / `mid` / `far`), a fixed target count, movement (`static` / `strafing` / `dynamic`), mode (`clicking` / `tracking`), and health. Clicking defaults are one-shot. Target-switching defaults are tracking copies of the dynamic/strafe clicking tasks (health `20` on dynamic, `10` on strafe). Tracking defaults are one small dynamic target with infinite health. Mid wall is omitted from the name; close and far append `CLOSE` or `FAR`; switching names include `SWITCHING` and the health value; tracking names include `TRACKING`. Edit that Python file and click **RESET TASKS** to reload it immediately (no rebuild). `python scripts/default-tasks.py` still regenerates the committed JSON/C++ table for the next compile.
+- Default presets come from `scripts/default-tasks.py`. A default task is size, wall (`close` / `mid` / `far`), a fixed target count, movement (`static` / `strafing` / `dynamic`), mode (`clicking` / `tracking`), and health. Clicking defaults are one-shot. Target-switching defaults are tracking copies of the dynamic/strafe clicking tasks (health `20` on dynamic, `10` on strafe). Tracking defaults are one small dynamic target with infinite health. Mid wall is omitted from the name; close and far append `CLOSE` or `FAR`; switching names include `SWITCHING` and the health value; tracking names include `TRACKING`. Edit that Python file and click **Reset tasks** to reload it immediately (no rebuild). `python scripts/default-tasks.py` still regenerates the committed JSON/C++ table for the next compile.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
 - User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
@@ -119,7 +120,8 @@ The code is split into focused translation units:
 - `default_tasks.inc` — generated built-in task table (`python scripts/default-tasks.py`).
 - `data/default-tasks.json` — human-readable default task definitions.
 - `scenario.{hpp,cpp}` — target spawning, movement, and scenario simulation.
-- `render.{hpp,cpp}` — bitmap font, 2D primitives, 3D world, and the in-scenario HUD.
+- `render.{hpp,cpp}` — 2D primitives, 3D world, and the in-scenario HUD.
+- `font.cpp` — system monospace UI text (Consolas / Menlo / DejaVu).
 - `menu.{hpp,cpp}` — the text-box settings menu and its editing state machine.
 - `selftest.cpp` — the headless `--self-test` suite.
 - `main.cpp` — SDL setup, the main loop, and the debug/screenshot modes.

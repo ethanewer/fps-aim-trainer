@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "config.hpp"
 #include "math.hpp"
@@ -25,7 +26,19 @@ int run_self_test() {
     bool ok = true;
     g_live_default_tasks = false;
 
-    ok = self_test_check(std::string(glyph('[')[0]) != "00000" && std::string(glyph(']')[0]) != "00000", "menu font draws unit brackets") && ok;
+    ok = self_test_check(text_width("[", 2.0f) > 1.0f && text_width("]", 2.0f) > 1.0f, "menu font measures unit brackets") && ok;
+    ok = self_test_check(text_width("Aim", 2.0f) > 1.0f && text_width("aim", 2.0f) > 1.0f, "menu font measures mixed-case text") && ok;
+    ok = self_test_check(std::fabs(text_width("i", 2.0f) - text_width("M", 2.0f)) < 0.5f, "menu font is monospace") && ok;
+    {
+        std::string long_text(40, 'W');
+        const float scale = 2.0f;
+        const float max_width = 50.0f;
+        ok = self_test_check(text_width(long_text, 1.0f) > max_width, "long label is wider than the fit box at scale 1") && ok;
+        float fitted = text_fit_scale(long_text, scale, max_width);
+        ok = self_test_check(fitted < 1.0f, "text_fit shrinks below scale 1 when needed") && ok;
+        ok = self_test_check(text_width(long_text, fitted) <= max_width + 0.05f, "fitted text width stays within max_width") && ok;
+        ok = self_test_check(std::fabs(text_fit_scale("OK", scale, 400.0f) - scale) < 0.0001f, "text_fit keeps the requested scale when the text already fits") && ok;
+    }
 
     Game game;
     ensure_presets(game);
@@ -334,7 +347,7 @@ int run_self_test() {
         std::remove("build/self-test-live-tasks.py");
     }
 
-    // Creating a preset must scroll it into the 7-row visible window.
+    // Creating a preset must scroll it into the visible list window.
     {
         Game scroll_test;
         for (int i = 0; i < 12; ++i) {
@@ -343,7 +356,32 @@ int run_self_test() {
         scroll_test.wall_preset_scroll = 0;
         new_wall_preset(scroll_test);
         int sel = scroll_test.selected_wall_preset;
-        ok = self_test_check(sel >= scroll_test.wall_preset_scroll && sel <= scroll_test.wall_preset_scroll + 6, "new preset is scrolled into the visible list window") && ok;
+        ok = self_test_check(sel >= scroll_test.wall_preset_scroll && sel <= scroll_test.wall_preset_scroll + VISIBLE_PRESET_ROWS - 1, "new preset is scrolled into the visible list window") && ok;
+    }
+
+    {
+        Game search_test;
+        search_test.wall_presets = {
+            {"1W2T DYNAMIC", WallClickSettings{}},
+            {"1W3T STRAFE", WallClickSettings{}},
+            {"1W2T STRAFE FAR", WallClickSettings{}},
+            {"1W1TS DYNAMIC TRACKING", WallClickSettings{}},
+        };
+        search_test.preset_search = "strafe";
+        std::vector<int> hits = matching_wall_presets(search_test);
+        ok = self_test_check(hits.size() == 2 && hits[0] == 1 && hits[1] == 2, "preset search matches names case-insensitively") && ok;
+        search_test.preset_search.clear();
+        ok = self_test_check(matching_wall_presets(search_test).size() == 4, "empty preset search shows every task") && ok;
+        menu_focus_field(search_test, FieldId::PresetSearch);
+        Input typed;
+        typed.text_input = "Dyn";
+        menu_handle_edit(search_test, typed);
+        ok = self_test_check(search_test.edit_draft == "Dyn", "preset search keeps mixed-case draft") && ok;
+        hits = matching_wall_presets(search_test);
+        ok = self_test_check(hits.size() == 2 && hits[0] == 0 && hits[1] == 3, "live search draft filters the task list") && ok;
+        search_test.preset_search = "NOPE";
+        new_wall_preset(search_test);
+        ok = self_test_check(search_test.preset_search.empty() && matching_wall_presets(search_test).size() == 5, "new task clears search so the copy is visible") && ok;
     }
 
     g_settings_path_override = "build/self-test-settings.cfg";

@@ -7,7 +7,6 @@
 #endif
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -161,6 +160,7 @@ float ui_scale_for_height(int h) {
 }
 
 void rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     color(r, g, b, a);
@@ -168,119 +168,6 @@ void rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, u
     glVertex2f(x, y); glVertex2f(x + w, y); glVertex2f(x + w, y + h); glVertex2f(x, y + h);
     glEnd();
     glDisable(GL_BLEND);
-}
-
-const std::array<const char*, 7>& glyph(char c) {
-    static const std::array<const char*, 7> blank = {"00000","00000","00000","00000","00000","00000","00000"};
-    static const std::array<const char*, 7> glyphs[47] = {
-        {"01110","10001","10011","10101","11001","10001","01110"}, // 0
-        {"00100","01100","00100","00100","00100","00100","01110"}, // 1
-        {"01110","10001","00001","00010","00100","01000","11111"}, // 2
-        {"11110","00001","00001","01110","00001","00001","11110"}, // 3
-        {"00010","00110","01010","10010","11111","00010","00010"}, // 4
-        {"11111","10000","10000","11110","00001","00001","11110"}, // 5
-        {"00110","01000","10000","11110","10001","10001","01110"}, // 6
-        {"11111","00001","00010","00100","01000","01000","01000"}, // 7
-        {"01110","10001","10001","01110","10001","10001","01110"}, // 8
-        {"01110","10001","10001","01111","00001","00010","11100"}, // 9
-        {"01110","10001","10001","11111","10001","10001","10001"}, // A
-        {"11110","10001","10001","11110","10001","10001","11110"}, // B
-        {"01111","10000","10000","10000","10000","10000","01111"}, // C
-        {"11110","10001","10001","10001","10001","10001","11110"}, // D
-        {"11111","10000","10000","11110","10000","10000","11111"}, // E
-        {"11111","10000","10000","11110","10000","10000","10000"}, // F
-        {"01111","10000","10000","10011","10001","10001","01111"}, // G
-        {"10001","10001","10001","11111","10001","10001","10001"}, // H
-        {"01110","00100","00100","00100","00100","00100","01110"}, // I
-        {"00111","00010","00010","00010","00010","10010","01100"}, // J
-        {"10001","10010","10100","11000","10100","10010","10001"}, // K
-        {"10000","10000","10000","10000","10000","10000","11111"}, // L
-        {"10001","11011","10101","10101","10001","10001","10001"}, // M
-        {"10001","11001","10101","10011","10001","10001","10001"}, // N
-        {"01110","10001","10001","10001","10001","10001","01110"}, // O
-        {"11110","10001","10001","11110","10000","10000","10000"}, // P
-        {"01110","10001","10001","10001","10101","10010","01101"}, // Q
-        {"11110","10001","10001","11110","10100","10010","10001"}, // R
-        {"01111","10000","10000","01110","00001","00001","11110"}, // S
-        {"11111","00100","00100","00100","00100","00100","00100"}, // T
-        {"10001","10001","10001","10001","10001","10001","01110"}, // U
-        {"10001","10001","10001","10001","10001","01010","00100"}, // V
-        {"10001","10001","10001","10101","10101","10101","01010"}, // W
-        {"10001","10001","01010","00100","01010","10001","10001"}, // X
-        {"10001","10001","01010","00100","00100","00100","00100"}, // Y
-        {"11111","00001","00010","00100","01000","10000","11111"}, // Z
-        {"00000","00000","00000","11111","00000","00000","00000"}, // -
-        {"00000","00100","00100","11111","00100","00100","00000"}, // +
-        {"00000","00000","00000","00000","00000","01100","01100"}, // .
-        {"00000","01100","01100","00000","01100","01100","00000"}, // :
-        {"00001","00010","00010","00100","01000","01000","10000"}, // /
-        {"11001","11010","00100","01000","10110","00110","00000"}, // %
-        {"00000","00000","00000","00000","00000","00000","11111"}, // _
-        {"00110","01000","10000","10000","10000","01000","00110"}, // (
-        {"01100","00010","00001","00001","00001","00010","01100"}, // )
-        {"11100","10000","10000","10000","10000","10000","11100"}, // [
-        {"00111","00001","00001","00001","00001","00001","00111"}, // ]
-    };
-    if (c >= '0' && c <= '9') return glyphs[c - '0'];
-    if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
-    if (c >= 'A' && c <= 'Z') return glyphs[10 + c - 'A'];
-    if (c == '-') return glyphs[36];
-    if (c == '+') return glyphs[37];
-    if (c == '.') return glyphs[38];
-    if (c == ':') return glyphs[39];
-    if (c == '/') return glyphs[40];
-    if (c == '%') return glyphs[41];
-    if (c == '_') return glyphs[42];
-    if (c == '(') return glyphs[43];
-    if (c == ')') return glyphs[44];
-    if (c == '[') return glyphs[45];
-    if (c == ']') return glyphs[46];
-    return blank;
-}
-
-float text_width(const std::string& value, float scale) {
-    float width = 0.0f;
-    for (char c : value) {
-        width += (c == ' ') ? 4.0f * scale : 6.0f * scale;
-    }
-    return width;
-}
-
-void text(float x, float y, const std::string& value, float scale, uint8_t r, uint8_t g, uint8_t b) {
-    float cursor = x;
-    for (char c : value) {
-        if (c == ' ') {
-            cursor += 4.0f * scale;
-            continue;
-        }
-        const auto& rows = glyph(c);
-        for (int row = 0; row < 7; ++row) {
-            for (int col = 0; col < 5; ++col) {
-                if (rows[row][col] == '1') {
-                    rect(cursor + col * scale, y + row * scale, scale * 0.82f, scale * 0.82f, r, g, b);
-                }
-            }
-        }
-        cursor += 6.0f * scale;
-    }
-}
-
-void text_fit(
-    float x,
-    float y,
-    const std::string& value,
-    float scale,
-    float max_width,
-    uint8_t r,
-    uint8_t g,
-    uint8_t b
-) {
-    float base_width = text_width(value, 1.0f);
-    float fitted_scale = scale;
-    if (base_width > 0.0f && text_width(value, scale) > max_width) {
-        fitted_scale = std::max(1.0f, max_width / base_width);
-    }
-    text(x, y, value, fitted_scale, r, g, b);
 }
 
 bool list_button(const Input& input, float x, float y, float w, float h, const std::string& label, bool selected) {
@@ -292,7 +179,8 @@ bool list_button(const Input& input, float x, float y, float w, float h, const s
     rect(x, y + h - 2, w, 2, 83, 96, 112);
     rect(x, y, 2, h, 83, 96, 112);
     rect(x + w - 2, y, 2, h, 83, 96, 112);
-    text_fit(x + 14.0f, y + 10.0f, label, 2.1f, w - 28.0f, 230, 236, 244);
+    const float label_scale = 1.85f;
+    text_fit(x + 14.0f, y + (h - text_height(label_scale)) * 0.5f, label, label_scale, w - 28.0f, 230, 236, 244);
     return hovered && input.left_pressed;
 }
 
@@ -332,25 +220,25 @@ void draw_world(const Game& game, int w, int h) {
     rect(cx - thick * 0.5f, cy - gap - len, thick, len, 245, 248, 252);
     rect(cx - thick * 0.5f, cy + gap, thick, len, 245, 248, 252);
     char line[160];
-    std::snprintf(line, sizeof(line), "FOV 103  SENS %.3f", game.sensitivity);
+    std::snprintf(line, sizeof(line), "FOV 103  Sens %.3f", game.sensitivity);
     std::string sens_line = line;
     std::string stat_line;
     std::string timer_line;
     if (game.run_mode == RunMode::Challenge) {
         // Score is hits; accuracy is shown but is not the score.
         float accuracy = game.stats.shots == 0 ? 0.0f : static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f;
-        std::snprintf(line, sizeof(line), "SCORE %d  ACC %.1f%%", game.stats.hits, accuracy);
+        std::snprintf(line, sizeof(line), "Score %d  Acc %.1f%%", game.stats.hits, accuracy);
         stat_line = line;
         float remaining = game.challenge_time_left < 0.0f ? 0.0f : game.challenge_time_left;
-        std::snprintf(line, sizeof(line), "CHALLENGE  TIME %.1f", remaining);
+        std::snprintf(line, sizeof(line), "Challenge  Time %.1f", remaining);
         timer_line = line;
     } else if (!is_tracking(game.scenario.kind)) {
         float accuracy = game.stats.shots == 0 ? 100.0f : static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f;
-        std::snprintf(line, sizeof(line), "HITS %d  SHOTS %d  ACC %.1f%%", game.stats.hits, game.stats.shots, accuracy);
+        std::snprintf(line, sizeof(line), "Hits %d  Shots %d  Acc %.1f%%", game.stats.hits, game.stats.shots, accuracy);
         stat_line = line;
     } else {
         float tracking = game.stats.tracking_fire_time <= 0.0001f ? 0.0f : game.stats.tracking_on_time / game.stats.tracking_fire_time * 100.0f;
-        std::snprintf(line, sizeof(line), "TRACKING %.1f%%  HOLD LMB", tracking);
+        std::snprintf(line, sizeof(line), "Tracking %.1f%%  Hold LMB", tracking);
         stat_line = line;
     }
     bool challenge = !timer_line.empty();
@@ -369,5 +257,5 @@ void draw_world(const Game& game, int w, int h) {
     if (challenge) {
         text_fit(42, 138, timer_line, 2.4f, hud_w - 36.0f, 255, 200, 90);
     }
-    text_fit(42, ui_h - 42, challenge ? "ESC ABORT" : "ESC MENU / QUIT", 2.2f, ui_w - 84.0f, 210, 220, 232);
+    text_fit(42, ui_h - 42, challenge ? "Esc abort" : "Esc menu / Quit", 2.2f, ui_w - 84.0f, 210, 220, 232);
 }

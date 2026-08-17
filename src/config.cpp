@@ -227,7 +227,7 @@ void ensure_presets(Game& game) {
     ensure_wall_presets(game);
     normalize_settings(game);
     game.selected_wall_preset = std::max(0, std::min(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()) - 1));
-    game.wall_preset_scroll = std::max(0, std::min(game.wall_preset_scroll, std::max(0, static_cast<int>(game.wall_presets.size()) - 7)));
+    game.wall_preset_scroll = std::max(0, std::min(game.wall_preset_scroll, std::max(0, static_cast<int>(game.wall_presets.size()) - VISIBLE_PRESET_ROWS)));
 }
 
 void apply_selected_presets(Game& game) {
@@ -519,6 +519,7 @@ void reset_wall_presets(Game& game) {
     game.wall_presets = loaded;
     game.selected_wall_preset = 0;
     game.wall_preset_scroll = 0;
+    game.preset_search.clear();
     normalize_settings(game);
     if (game.wall_presets.empty()) {
         game.wall_presets = compiled_default_wall_presets();

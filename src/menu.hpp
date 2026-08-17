@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "types.hpp"
 
 // Main menu entry point (handles editing, layout and drawing for one frame).
@@ -17,3 +19,6 @@ void menu_cancel_edit(Game& game);   // discard the active field and unfocus
 // Preset actions.
 void new_wall_preset(Game& game);
 void delete_wall_preset(Game& game);
+
+// Indices into `game.wall_presets` whose names contain the current search query.
+std::vector<int> matching_wall_presets(const Game& game);

@@ -134,7 +134,7 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     game.active_field = FieldId::None;
     game.scenario = scenario;
     game.scenario.kind = is_tracking(game.wall_settings.task_mode) ? ScenarioKind::Tracking : ScenarioKind::WallClick;
-    game.scenario.title = is_tracking(game.scenario.kind) ? "WALL TRACKING" : "WALL CLICKING";
+    game.scenario.title = is_tracking(game.scenario.kind) ? "Wall tracking" : "Wall clicking";
     game.run_mode = mode;
     game.challenge_time_left = mode == RunMode::Challenge ? CHALLENGE_DURATION_SEC : 0.0f;
     game.fire_accumulator = 0.0f;
@@ -409,7 +409,7 @@ void update_playing(Game& game, const Input& input, float dt) {
 
 void init_scenarios(Game& game) {
     game.scenarios = {
-        {"WALL CLICKING", ScenarioKind::WallClick, MapKind::WallRoom, 0.0f, 0, 0.0f},
+        {"Wall clicking", ScenarioKind::WallClick, MapKind::WallRoom, 0.0f, 0, 0.0f},
     };
     game.scenario = game.scenarios.front();
 }

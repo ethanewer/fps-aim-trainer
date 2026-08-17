@@ -311,7 +311,7 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
             game.wall_presets.push_back({name, game.wall_settings});
         }
         ensure_presets(game);
-        game.wall_preset_scroll = std::max(0, static_cast<int>(game.wall_presets.size()) - 7);
+        game.wall_preset_scroll = std::max(0, static_cast<int>(game.wall_presets.size()) - VISIBLE_PRESET_ROWS);
     } else if (state_index == 4) {
         game.menu_tab = MenuTab::Clicking;
         game.wall_preset_name = "MAX RANGE STRESS TEST";
@@ -335,6 +335,11 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
         game.wall_settings.task_mode = TaskMode::Tracking;
         game.wall_settings.target_health = 20;
         normalize_settings(game);
+    } else if (state_index == 7) {
+        game.menu_tab = MenuTab::Clicking;
+        menu_focus_field(game, FieldId::PresetSearch);
+        game.edit_draft = "strafe";
+        game.edit_fresh = false;
     }
     Input input;
     int drawable_w = 0, drawable_h = 0;

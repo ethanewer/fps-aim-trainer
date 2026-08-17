@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <ctime>
 #include <string>
+#include <vector>
 
 #include "config.hpp"
 #include "render.hpp"
@@ -23,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 struct FieldDesc {
-    enum Kind { Name, IntVal, FloatVal };
+    enum Kind { Name, Search, IntVal, FloatVal };
     Kind kind = FloatVal;
     float* fptr = nullptr;
     int* iptr = nullptr;
@@ -59,9 +60,17 @@ static FieldDesc f_name(std::string* p) {
     return d;
 }
 
+static FieldDesc f_search(std::string* p) {
+    FieldDesc d;
+    d.kind = FieldDesc::Search;
+    d.sptr = p;
+    return d;
+}
+
 static FieldDesc field_desc(Game& g, FieldId id) {
     int capacity = wall_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance_max);
     switch (id) {
+        case FieldId::PresetSearch: return f_search(&g.preset_search);
         case FieldId::WallName: return f_name(&g.wall_preset_name);
         case FieldId::WallHealth: return f_int(&g.wall_settings.target_health, 0, WALL_TARGET_HEALTH_MAX);
         case FieldId::WallDistMin: return f_float(&g.wall_settings.wall_distance_min, 2.0f, 30.0f, 2);
@@ -94,7 +103,7 @@ static FieldDesc field_desc(Game& g, FieldId id) {
 static std::string format_field(Game& g, FieldId id) {
     FieldDesc d = field_desc(g, id);
     char buffer[32];
-    if (d.kind == FieldDesc::Name) {
+    if (d.kind == FieldDesc::Name || d.kind == FieldDesc::Search) {
         return d.sptr ? *d.sptr : std::string();
     }
     if (d.kind == FieldDesc::IntVal) {
@@ -118,6 +127,12 @@ static void commit_to_value(Game& g, FieldId id) {
         // would store, and falls back to "UNTITLED" so the box is never blank.
         if (d.sptr) {
             *d.sptr = sanitize_preset_name(g.edit_draft);
+        }
+        return;
+    }
+    if (d.kind == FieldDesc::Search) {
+        if (d.sptr) {
+            *d.sptr = g.edit_draft;
         }
         return;
     }
@@ -146,7 +161,8 @@ void menu_focus_field(Game& g, FieldId id) {
     }
     g.active_field = id;
     g.edit_draft = format_field(g, id);
-    g.edit_fresh = field_desc(g, id).kind != FieldDesc::Name;  // numbers retype, names edit in place
+    FieldDesc focused = field_desc(g, id);
+    g.edit_fresh = focused.kind == FieldDesc::IntVal || focused.kind == FieldDesc::FloatVal;
 }
 
 void menu_blur_field(Game& g) {
@@ -165,7 +181,7 @@ void menu_cancel_edit(Game& g) {
 }
 
 static const FieldId WALL_ORDER[] = {
-    FieldId::WallName, FieldId::WallTargetsMin, FieldId::WallHealth,
+    FieldId::PresetSearch, FieldId::WallName, FieldId::WallTargetsMin, FieldId::WallHealth,
     FieldId::WallDistMin, FieldId::WallDistMax,
     FieldId::WallRadiusMin, FieldId::WallRadiusMax,
     FieldId::WallHSpeedMin, FieldId::WallHSpeedMax,
@@ -218,10 +234,19 @@ void menu_handle_edit(Game& g, const Input& input) {
     }
     FieldDesc d = field_desc(g, g.active_field);
     size_t max_len = d.kind == FieldDesc::FloatVal ? 6 : 5;
+    if (d.kind == FieldDesc::Name || d.kind == FieldDesc::Search) {
+        max_len = static_cast<size_t>(PRESET_NAME_MAX);
+    }
     for (char c : input.text_input) {
         if (d.kind == FieldDesc::Name) {
-            if (is_allowed_preset_char(c) && g.edit_draft.size() < static_cast<size_t>(PRESET_NAME_MAX)) {
+            if (is_allowed_preset_char(c) && g.edit_draft.size() < max_len) {
                 g.edit_draft.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+            }
+            continue;
+        }
+        if (d.kind == FieldDesc::Search) {
+            if (is_allowed_preset_char(c) && g.edit_draft.size() < max_len) {
+                g.edit_draft.push_back(c);
             }
             continue;
         }
@@ -264,7 +289,34 @@ void menu_handle_edit(Game& g, const Input& input) {
 // Preset actions.
 // ---------------------------------------------------------------------------
 
-static const int VISIBLE_PRESET_ROWS = 7;
+static std::string ascii_lower(std::string value) {
+    for (char& c : value) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return value;
+}
+
+static bool preset_name_matches(const std::string& name, const std::string& query) {
+    if (query.empty()) {
+        return true;
+    }
+    return ascii_lower(name).find(ascii_lower(query)) != std::string::npos;
+}
+
+std::vector<int> matching_wall_presets(const Game& game) {
+    std::string query = game.preset_search;
+    if (game.active_field == FieldId::PresetSearch) {
+        query = game.edit_draft;
+    }
+    std::vector<int> matches;
+    matches.reserve(game.wall_presets.size());
+    for (int i = 0; i < static_cast<int>(game.wall_presets.size()); ++i) {
+        if (preset_name_matches(game.wall_presets[i].name, query)) {
+            matches.push_back(i);
+        }
+    }
+    return matches;
+}
 
 // Adjusts `scroll` so the selected row is within the visible window.
 static void reveal_selected_preset(int selected, int count, int& scroll) {
@@ -280,6 +332,7 @@ void new_wall_preset(Game& game) {
     char name[32];
     std::snprintf(name, sizeof(name), "CLICK PRESET %d", static_cast<int>(game.wall_presets.size()) + 1);
     game.active_field = FieldId::None;
+    game.preset_search.clear();
     std::string unique_name = unique_preset_name(game.wall_presets, name, -1);
     game.wall_presets.push_back({unique_name, game.wall_settings});
     game.selected_wall_preset = static_cast<int>(game.wall_presets.size()) - 1;
@@ -305,8 +358,7 @@ void delete_wall_preset(Game& game) {
 // Widgets.
 // ---------------------------------------------------------------------------
 
-static const float VALUE_SCALE = 2.0f;
-static const float GLYPH_H = 7.0f * VALUE_SCALE;  // height of value/label text
+static const float VALUE_SCALE = 1.85f;
 
 static void draw_card(float x, float y, float w, float h) {
     rect(x + 4.0f, y + 4.0f, w, h, 0, 0, 0, 90);            // soft shadow
@@ -322,7 +374,7 @@ static bool hit(const Input& in, float x, float y, float w, float h) {
     return in.mouse_x >= x && in.mouse_x <= x + w && in.mouse_y >= y && in.mouse_y <= y + h;
 }
 
-// Label like "RADIUS [M]" drawn with a bright name and a dimmer unit tag.
+// Label like "Radius [m]" drawn with a bright name and a dimmer unit tag.
 static void field_label(float x, float y, const std::string& label) {
     size_t bracket = label.find('[');
     if (bracket == std::string::npos) {
@@ -343,7 +395,7 @@ static bool secondary_button(const Input& in, float x, float y, float w, float h
     rect(x, y, 2.0f, h, 94, 108, 125);
     rect(x + w - 2.0f, y, 2.0f, h, 94, 108, 125);
     float lw = text_width(label, scale);
-    text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - 7.0f * scale) * 0.5f), label, scale, 225, 232, 240);
+    text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - text_height(scale)) * 0.5f), label, scale, 225, 232, 240);
     return hovered && in.left_pressed;
 }
 
@@ -354,7 +406,7 @@ static bool primary_button(const Input& in, float x, float y, float w, float h, 
     else rect(x, y, w, h, 255, 70, 85);
     rect(x, y, w, 2.0f, 255, 120, 132);            // top highlight
     float lw = text_width(label, scale);
-    text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - 7.0f * scale) * 0.5f), label, scale, 248, 248, 248);
+    text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - text_height(scale)) * 0.5f), label, scale, 248, 248, 248);
     return hovered && in.left_pressed;
 }
 
@@ -370,24 +422,24 @@ static bool toggle_button(const Input& in, float x, float y, float w, float h, c
     rect(x, y + h - 2.0f, w, 2.0f, br, bg, bb);
     rect(x, y, 2.0f, h, br, bg, bb);
     rect(x + w - 2.0f, y, 2.0f, h, br, bg, bb);
-    float scale = 2.0f;
+    float scale = VALUE_SCALE;
     float lw = text_width(label, scale);
-    text(x + std::max(6.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - 7.0f * scale) * 0.5f), label, scale,
+    text(x + std::max(6.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - text_height(scale)) * 0.5f), label, scale,
          selected ? 248 : 225, selected ? 248 : 232, selected ? 248 : 240);
     return hovered && in.left_pressed && !selected;
 }
 
 static void tab_button(Game& g, const Input& in, float x, float y, const std::string& label, MenuTab tab) {
-    const float w = 190.0f, h = 42.0f;
+    const float w = 156.0f, h = 32.0f;
     bool selected = g.menu_tab == tab;
     bool hovered = hit(in, x, y, w, h);
     rect(x, y, w, h,
          selected ? 46 : (hovered ? 40 : 28),
          selected ? 52 : (hovered ? 46 : 33),
          selected ? 62 : (hovered ? 56 : 41));
-    float scale = 2.35f;
+    float scale = 2.0f;
     float lw = text_width(label, scale);
-    text(x + (w - lw) * 0.5f, y + (h - 7.0f * scale) * 0.5f, label, scale,
+    text(x + (w - lw) * 0.5f, y + (h - text_height(scale)) * 0.5f, label, scale,
          selected ? 245 : 180, selected ? 248 : 190, selected ? 252 : 204);
     if (selected) {
         rect(x, y + h, w, 3.0f, 255, 70, 85);
@@ -419,9 +471,13 @@ static void value_box(Game& g, const Input& in, FieldId id, float x, float y, fl
     if (active) {
         shown += "_";
     }
-    float ty = y + (h - GLYPH_H) * 0.5f;
-    if (d.kind == FieldDesc::Name) {
-        text_fit(x + 12.0f, ty, shown, VALUE_SCALE, w - 22.0f, 240, 244, 248);
+    float ty = y + (h - text_height(VALUE_SCALE)) * 0.5f;
+    if (d.kind == FieldDesc::Name || d.kind == FieldDesc::Search) {
+        if (!active && shown.empty() && d.kind == FieldDesc::Search) {
+            text_fit(x + 10.0f, ty, "Search tasks", VALUE_SCALE, w - 20.0f, 120, 130, 145);
+        } else {
+            text_fit(x + 10.0f, ty, shown, VALUE_SCALE, w - 20.0f, 240, 244, 248);
+        }
     } else {
         float tw = text_width(shown, VALUE_SCALE);
         float tx = std::max(x + 8.0f, x + w - 12.0f - tw);
@@ -433,12 +489,12 @@ static void value_box(Game& g, const Input& in, FieldId id, float x, float y, fl
 }
 
 static void row_single(Game& g, const Input& in, float label_x, float box_x, float row_y, const std::string& label, FieldId id, float box_w, float box_h) {
-    field_label(label_x, row_y + (box_h - GLYPH_H) * 0.5f, label);
+    field_label(label_x, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, label);
     value_box(g, in, id, box_x, row_y, box_w, box_h);
 }
 
 static void row_range(Game& g, const Input& in, float label_x, float min_x, float max_x, float row_y, const std::string& label, FieldId min_id, FieldId max_id, float box_w, float box_h) {
-    field_label(label_x, row_y + (box_h - GLYPH_H) * 0.5f, label);
+    field_label(label_x, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, label);
     value_box(g, in, min_id, min_x, row_y, box_w, box_h);
     value_box(g, in, max_id, max_x, row_y, box_w, box_h);
 }
@@ -452,28 +508,38 @@ static void color_swatch(int r, int g, int b, float x, float y, float w, float h
 }
 
 static void color_row(Game& g, const Input& in, float label_x, float value_x, float row_y, const std::string& label, FieldId r_id, FieldId g_id, FieldId b_id, int r, int green, int b) {
-    field_label(label_x, row_y + 10.0f, label);
-    value_box(g, in, r_id, value_x, row_y, 68.0f, 34.0f);
-    value_box(g, in, g_id, value_x + 98.0f, row_y, 68.0f, 34.0f);
-    value_box(g, in, b_id, value_x + 196.0f, row_y, 68.0f, 34.0f);
-    color_swatch(r, green, b, value_x + 306.0f, row_y, 84.0f, 34.0f);
+    field_label(label_x, row_y + (28.0f - text_height(VALUE_SCALE)) * 0.5f, label);
+    value_box(g, in, r_id, value_x, row_y, 64.0f, 28.0f);
+    value_box(g, in, g_id, value_x + 88.0f, row_y, 64.0f, 28.0f);
+    value_box(g, in, b_id, value_x + 176.0f, row_y, 64.0f, 28.0f);
+    color_swatch(r, green, b, value_x + 256.0f, row_y, 72.0f, 28.0f);
 }
 
 // ---------------------------------------------------------------------------
 // Tab content.
 // ---------------------------------------------------------------------------
 
-static const float CARD_Y = 234.0f;
-static const float CARD_H = 474.0f;
-static const float SIDEBAR_W = 290.0f;
-static const float EDITOR_DX = 306.0f;
+static const float CARD_Y = 140.0f;
+static const float CARD_H = 428.0f;
+static const float SIDEBAR_W = 280.0f;
+static const float EDITOR_DX = 294.0f;
 static const float EDITOR_W = 662.0f;
+static const float ROW_H = 26.0f;
+static const float ROW_PITCH = 28.0f;
+static const float LIST_ROW_H = 28.0f;
+static const float LIST_PITCH = 30.0f;
+static const float BTN_H = 26.0f;
+static const float BTN_SCALE = 1.7f;
 
 static void draw_preset_sidebar(Game& g, const Input& in, float x) {
     draw_card(x, CARD_Y, SIDEBAR_W, CARD_H);
-    text(x + 16.0f, CARD_Y + 14.0f, "PRESETS", 2.0f, 150, 162, 178);
 
-    int count = static_cast<int>(g.wall_presets.size());
+    float row_x = x + 12.0f;
+    float row_w = SIDEBAR_W - 24.0f;
+    value_box(g, in, FieldId::PresetSearch, row_x, CARD_Y + 10.0f, row_w, ROW_H);
+
+    std::vector<int> matches = matching_wall_presets(g);
+    int count = static_cast<int>(matches.size());
     int& scroll = g.wall_preset_scroll;
     int& selected = g.selected_wall_preset;
     int max_scroll = std::max(0, count - VISIBLE_PRESET_ROWS);
@@ -482,25 +548,26 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x) {
     }
     scroll = std::max(0, std::min(scroll, max_scroll));
 
-    float row_x = x + 16.0f;
-    float row_w = SIDEBAR_W - 32.0f;
-    float list_y = CARD_Y + 48.0f;
+    float list_y = CARD_Y + 42.0f;
+    if (count == 0) {
+        text(row_x + 4.0f, list_y + 8.0f, "No matching tasks", 1.6f, 120, 130, 145);
+    }
     for (int row = 0; row < VISIBLE_PRESET_ROWS; ++row) {
-        int index = scroll + row;
-        if (index >= count) {
+        int match_index = scroll + row;
+        if (match_index >= count) {
             break;
         }
+        int index = matches[match_index];
         const std::string& name = g.wall_presets[index].name;
         bool is_selected = index == selected;
-        float y = list_y + row * 40.0f;
-        bool clicked = list_button(in, row_x, y, row_w, 34.0f, name, is_selected);
+        float y = list_y + static_cast<float>(row) * LIST_PITCH;
+        bool clicked = list_button(in, row_x, y, row_w, LIST_ROW_H, name, is_selected);
         if (is_selected) {
-            rect(row_x, y, 4.0f, 34.0f, 255, 70, 85);  // accent bar
+            rect(row_x, y, 4.0f, LIST_ROW_H, 255, 70, 85);
         }
         if (clicked) {
             menu_blur_field(g);
             if (is_selected) {
-                // Clicking the already-selected scenario starts a challenge run.
                 start_scenario(g, g.scenarios[0], RunMode::Challenge);
             } else {
                 selected = index;
@@ -510,21 +577,21 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x) {
         }
     }
 
-    float button_y = CARD_Y + CARD_H - 126.0f;
-    if (secondary_button(in, row_x, button_y, 120.0f, 34.0f, "NEW", 2.0f)) {
+    float button_y = CARD_Y + CARD_H - 96.0f;
+    if (secondary_button(in, row_x, button_y, 118.0f, BTN_H, "New", BTN_SCALE)) {
         menu_blur_field(g);
         new_wall_preset(g);
     }
-    if (secondary_button(in, row_x + 132.0f, button_y, row_w - 132.0f, 34.0f, "DELETE", 2.0f)) {
+    if (secondary_button(in, row_x + 128.0f, button_y, row_w - 128.0f, BTN_H, "Delete", BTN_SCALE)) {
         menu_blur_field(g);
         delete_wall_preset(g);
     }
-    if (secondary_button(in, row_x, button_y + 42.0f, row_w, 34.0f, "SAVE PRESET", 2.0f)) {
+    if (secondary_button(in, row_x, button_y + 32.0f, row_w, BTN_H, "Save preset", BTN_SCALE)) {
         menu_blur_field(g);
         save_current_wall_preset(g);
         save_settings(g);
     }
-    if (secondary_button(in, row_x, button_y + 84.0f, row_w, 34.0f, "RESET TASKS", 2.0f)) {
+    if (secondary_button(in, row_x, button_y + 64.0f, row_w, BTN_H, "Reset tasks", BTN_SCALE)) {
         menu_blur_field(g);
         reset_wall_presets(g);
         save_settings(g);
@@ -534,50 +601,49 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x) {
 // Shared editor card chrome: title, BEST readout, NAME box, PRACTICE/CHALLENGE.
 static void draw_editor_header(Game& g, const Input& in, float x, const std::string& title, FieldId name_id, ScenarioKind kind) {
     draw_card(x, CARD_Y, EDITOR_W, CARD_H);
-    float cl = x + 16.0f;
-    text(cl, CARD_Y + 12.0f, title, 2.8f, 230, 236, 244);
+    float cl = x + 14.0f;
+    text(cl, CARD_Y + 10.0f, title, 2.3f, 230, 236, 244);
 
-    // Best challenge score for the selected preset, right-aligned on the title row.
     int best = best_run_score(g, kind, g.wall_preset_name);
     if (best >= 0) {
         char buf[48];
-        std::snprintf(buf, sizeof(buf), "BEST %d", best);
+        std::snprintf(buf, sizeof(buf), "Best %d", best);
         std::string best_text = buf;
-        text(x + EDITOR_W - 16.0f - text_width(best_text, 2.0f), CARD_Y + 16.0f, best_text, 2.0f, 255, 200, 90);
+        text(x + EDITOR_W - 14.0f - text_width(best_text, 1.7f), CARD_Y + 14.0f, best_text, 1.7f, 255, 200, 90);
     }
 
-    float row_y = CARD_Y + 46.0f;
-    field_label(cl, row_y + 11.0f, "NAME");
-    float name_box_x = cl + 78.0f;
-    float name_box_w = 248.0f;
-    value_box(g, in, name_id, name_box_x, row_y, name_box_w, 36.0f);
+    float row_y = CARD_Y + 38.0f;
+    field_label(cl, row_y + (ROW_H - text_height(VALUE_SCALE)) * 0.5f, "Name");
+    float name_box_x = cl + 58.0f;
+    float name_box_w = 252.0f;
+    value_box(g, in, name_id, name_box_x, row_y, name_box_w, ROW_H);
 
-    float buttons_x = name_box_x + name_box_w + 16.0f;
-    float buttons_right = x + EDITOR_W - 16.0f;
-    float gap = 10.0f;
+    float buttons_x = name_box_x + name_box_w + 12.0f;
+    float buttons_right = x + EDITOR_W - 14.0f;
+    float gap = 8.0f;
     float bw = (buttons_right - buttons_x - gap) * 0.5f;
-    if (secondary_button(in, buttons_x, row_y, bw, 36.0f, "PRACTICE", 2.0f)) {
+    if (secondary_button(in, buttons_x, row_y, bw, ROW_H, "Practice", BTN_SCALE)) {
         menu_blur_field(g);
         start_scenario(g, g.scenarios[0], RunMode::Practice);
     }
-    if (primary_button(in, buttons_x + bw + gap, row_y, bw, 36.0f, "CHALLENGE", 2.0f)) {
+    if (primary_button(in, buttons_x + bw + gap, row_y, bw, ROW_H, "Challenge", BTN_SCALE)) {
         menu_blur_field(g);
         start_scenario(g, g.scenarios[0], RunMode::Challenge);
     }
-    divider(cl, CARD_Y + 94.0f, EDITOR_W - 32.0f);
+    divider(cl, CARD_Y + 72.0f, EDITOR_W - 28.0f);
 }
 
 static void draw_column_headers(float min_x, float max_x, float box_w, float y) {
     const float scale = 1.5f;
-    std::string mn = "MIN";
-    std::string mx = "MAX";
+    std::string mn = "Min";
+    std::string mx = "Max";
     text(min_x + (box_w - text_width(mn, scale)) * 0.5f, y, mn, scale, 150, 162, 178);
     text(max_x + (box_w - text_width(mx, scale)) * 0.5f, y, mx, scale, 150, 162, 178);
 }
 
 static void draw_footer_hint(float x) {
-    divider(x + 16.0f, CARD_Y + CARD_H - 42.0f, EDITOR_W - 32.0f);
-    text(x + 16.0f, CARD_Y + CARD_H - 30.0f, "TAB NEXT BOX   ENTER COMMITS   ESC CANCELS", 1.7f, 150, 162, 178);
+    divider(x + 14.0f, CARD_Y + CARD_H - 34.0f, EDITOR_W - 28.0f);
+    text(x + 14.0f, CARD_Y + CARD_H - 24.0f, "Tab next   Enter commits   Esc cancels", 1.5f, 150, 162, 178);
 }
 
 static void draw_tasks_tab(Game& g, const Input& in, float left) {
@@ -586,88 +652,88 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
     float x = left + EDITOR_DX;
     bool tracking = is_tracking(g.wall_settings.task_mode);
     ScenarioKind kind = tracking ? ScenarioKind::Tracking : ScenarioKind::WallClick;
-    draw_editor_header(g, in, x, tracking ? "WALL TRACKING" : "WALL CLICKING", FieldId::WallName, kind);
+    draw_editor_header(g, in, x, tracking ? "Wall tracking" : "Wall clicking", FieldId::WallName, kind);
 
-    float cl = x + 16.0f;
-    float inner_right = cl + EDITOR_W - 32.0f;
-    const float label_w = 200.0f;
-    const float col_gap = 14.0f;
+    float cl = x + 14.0f;
+    float inner_right = cl + EDITOR_W - 28.0f;
+    const float label_w = 148.0f;
+    const float col_gap = 10.0f;
     float min_x = cl + label_w;
     float box_w = (inner_right - min_x - col_gap) * 0.5f;
     float max_x = min_x + box_w + col_gap;
-    float box_h = 30.0f;
-    const float pitch = 34.0f;
+    float box_h = ROW_H;
+    const float pitch = ROW_PITCH;
 
-    float row_y = CARD_Y + 106.0f;
-    field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "TASK");
-    if (toggle_button(in, min_x, row_y, box_w, box_h, "CLICKING", !tracking)) {
+    float row_y = CARD_Y + 82.0f;
+    field_label(cl, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Task");
+    if (toggle_button(in, min_x, row_y, box_w, box_h, "Clicking", !tracking)) {
         menu_blur_field(g);
         g.wall_settings.task_mode = TaskMode::Clicking;
     }
-    if (toggle_button(in, max_x, row_y, box_w, box_h, "TRACKING", tracking)) {
+    if (toggle_button(in, max_x, row_y, box_w, box_h, "Tracking", tracking)) {
         menu_blur_field(g);
         g.wall_settings.task_mode = TaskMode::Tracking;
     }
     row_y += pitch;
 
-    field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "TARGETS");
+    field_label(cl, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Targets");
     value_box(g, in, FieldId::WallTargetsMin, min_x, row_y, box_w, box_h);
     row_y += pitch;
 
-    field_label(cl, row_y + (box_h - GLYPH_H) * 0.5f, "HEALTH");
+    field_label(cl, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Health");
     value_box(g, in, FieldId::WallHealth, min_x, row_y, box_w, box_h);
-    text(max_x + 12.0f, row_y + (box_h - GLYPH_H) * 0.5f, "0 INF", 1.7f, 150, 162, 178);
+    text(max_x + 10.0f, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "0 = inf", 1.5f, 150, 162, 178);
     row_y += pitch;
 
-    divider(cl, row_y - 2.0f, EDITOR_W - 32.0f);
-    draw_column_headers(min_x, max_x, box_w, row_y + 6.0f);
-    row_y += 22.0f;
+    divider(cl, row_y - 2.0f, EDITOR_W - 28.0f);
+    draw_column_headers(min_x, max_x, box_w, row_y + 4.0f);
+    row_y += 18.0f;
 
-    row_range(g, in, cl, min_x, max_x, row_y, "WALL [M]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "RADIUS [M]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "H SPEED [M/S]", FieldId::WallHSpeedMin, FieldId::WallHSpeedMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "V SPEED [M/S]", FieldId::WallVSpeedMin, FieldId::WallVSpeedMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "ACCEL [M/S2]", FieldId::WallAccelMin, FieldId::WallAccelMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "DIR CHANGE [SEC]", FieldId::WallDirMin, FieldId::WallDirMax, box_w, box_h);
+    row_range(g, in, cl, min_x, max_x, row_y, "Wall [m]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
+    row_range(g, in, cl, min_x, max_x, row_y, "Radius [m]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
+    row_range(g, in, cl, min_x, max_x, row_y, "H speed [m/s]", FieldId::WallHSpeedMin, FieldId::WallHSpeedMax, box_w, box_h); row_y += pitch;
+    row_range(g, in, cl, min_x, max_x, row_y, "V speed [m/s]", FieldId::WallVSpeedMin, FieldId::WallVSpeedMax, box_w, box_h); row_y += pitch;
+    row_range(g, in, cl, min_x, max_x, row_y, "Accel [m/s2]", FieldId::WallAccelMin, FieldId::WallAccelMax, box_w, box_h); row_y += pitch;
+    row_range(g, in, cl, min_x, max_x, row_y, "Dir change [s]", FieldId::WallDirMin, FieldId::WallDirMax, box_w, box_h);
 
     draw_footer_hint(x);
 }
 
 static void draw_general_tab(Game& g, const Input& in, float left) {
-    float w = SIDEBAR_W + (EDITOR_DX - SIDEBAR_W) + EDITOR_W;  // span both columns
+    float w = SIDEBAR_W + (EDITOR_DX - SIDEBAR_W) + EDITOR_W;
     draw_card(left, CARD_Y, w, CARD_H);
-    float cl = left + 16.0f;
-    text(cl, CARD_Y + 14.0f, "GENERAL", 2.8f, 230, 236, 244);
-    if (primary_button(in, left + w - 276.0f, CARD_Y + 12.0f, 260.0f, 40.0f, "SAVE GENERAL", 2.25f)) {
+    float cl = left + 14.0f;
+    text(cl, CARD_Y + 12.0f, "General", 2.3f, 230, 236, 244);
+    if (primary_button(in, left + w - 220.0f, CARD_Y + 10.0f, 206.0f, 32.0f, "Save general", 1.85f)) {
         menu_blur_field(g);
         save_settings(g);
     }
 
-    float value_x = cl + 280.0f;
-    float box_h = 34.0f;
+    float value_x = cl + 240.0f;
+    float box_h = 28.0f;
 
-    float sens_y = CARD_Y + 64.0f;
-    field_label(cl, sens_y + (box_h - GLYPH_H) * 0.5f, "SENSITIVITY");
-    value_box(g, in, FieldId::GenSens, value_x, sens_y, 130.0f, box_h);
+    float sens_y = CARD_Y + 52.0f;
+    field_label(cl, sens_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Sensitivity");
+    value_box(g, in, FieldId::GenSens, value_x, sens_y, 120.0f, box_h);
 
-    divider(cl, CARD_Y + 112.0f, w - 32.0f);
-    text(cl, CARD_Y + 126.0f, "CROSSHAIR", 2.6f, 230, 236, 244);
+    divider(cl, CARD_Y + 92.0f, w - 28.0f);
+    text(cl, CARD_Y + 104.0f, "Crosshair", 2.1f, 230, 236, 244);
 
-    float row_y = CARD_Y + 166.0f;
-    const float pitch = 44.0f;
-    row_single(g, in, cl, value_x, row_y, "LENGTH [PX]", FieldId::GenLength, 130.0f, box_h); row_y += pitch;
-    row_single(g, in, cl, value_x, row_y, "GAP [PX]", FieldId::GenGap, 130.0f, box_h); row_y += pitch;
-    row_single(g, in, cl, value_x, row_y, "THICKNESS [PX]", FieldId::GenThick, 130.0f, box_h);
+    float row_y = CARD_Y + 136.0f;
+    const float pitch = 34.0f;
+    row_single(g, in, cl, value_x, row_y, "Length [px]", FieldId::GenLength, 120.0f, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Gap [px]", FieldId::GenGap, 120.0f, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Thickness [px]", FieldId::GenThick, 120.0f, box_h);
 
-    divider(cl, CARD_Y + 302.0f, w - 32.0f);
-    text(cl, CARD_Y + 318.0f, "COLORS", 2.6f, 230, 236, 244);
+    divider(cl, CARD_Y + 244.0f, w - 28.0f);
+    text(cl, CARD_Y + 256.0f, "Colors", 2.1f, 230, 236, 244);
 
-    float color_y = CARD_Y + 358.0f;
-    text(value_x + 34.0f - text_width("R", 1.5f) * 0.5f, color_y - 17.0f, "R", 1.5f, 150, 162, 178);
-    text(value_x + 132.0f - text_width("G", 1.5f) * 0.5f, color_y - 17.0f, "G", 1.5f, 150, 162, 178);
-    text(value_x + 230.0f - text_width("B", 1.5f) * 0.5f, color_y - 17.0f, "B", 1.5f, 150, 162, 178);
-    color_row(g, in, cl, value_x, color_y, "TARGET", FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB, g.target_color.r, g.target_color.g, g.target_color.b);
-    color_row(g, in, cl, value_x, color_y + 42.0f, "WALL", FieldId::GenWallR, FieldId::GenWallG, FieldId::GenWallB, g.wall_color.r, g.wall_color.g, g.wall_color.b);
+    float color_y = CARD_Y + 292.0f;
+    text(value_x + 32.0f - text_width("R", 1.4f) * 0.5f, color_y - 16.0f, "R", 1.4f, 150, 162, 178);
+    text(value_x + 120.0f - text_width("G", 1.4f) * 0.5f, color_y - 16.0f, "G", 1.4f, 150, 162, 178);
+    text(value_x + 208.0f - text_width("B", 1.4f) * 0.5f, color_y - 16.0f, "B", 1.4f, 150, 162, 178);
+    color_row(g, in, cl, value_x, color_y, "Target", FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB, g.target_color.r, g.target_color.g, g.target_color.b);
+    color_row(g, in, cl, value_x, color_y + 36.0f, "Wall", FieldId::GenWallR, FieldId::GenWallG, FieldId::GenWallB, g.wall_color.r, g.wall_color.g, g.wall_color.b);
 }
 
 // ---------------------------------------------------------------------------
@@ -690,7 +756,7 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
     float base_w = ui_w / menu_scale;
     float base_h = ui_h / menu_scale;
     // Vertically center the title-to-card block in the available height.
-    float content_mid = (58.0f + (CARD_Y + CARD_H)) * 0.5f;
+    float content_mid = (32.0f + (CARD_Y + CARD_H)) * 0.5f;
     float voff = std::max(0.0f, base_h * 0.5f - content_mid);
 
     Input ui_input = input;
@@ -702,13 +768,12 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
     glTranslatef(0.0f, voff, 0.0f);
 
     float left = std::max(42.0f, base_w * 0.5f - 520.0f);
-    text(left, 58.0f, "AIM TRAINER", 4.7f, 235, 240, 245);
-    text(left, 110.0f, "FOV LOCKED TO 103 HORIZONTAL", 2.0f, 150, 162, 178);
-    text(left, 134.0f, "MATCH YOUR IN-GAME SENSITIVITY", 2.0f, 150, 162, 178);
+    text(left, 32.0f, "Aim Trainer", 3.6f, 235, 240, 245);
+    text(left, 68.0f, "FOV locked to 103  |  Match in-game sensitivity", 1.7f, 150, 162, 178);
 
-    float tabs_y = 170.0f;
-    tab_button(game, ui_input, left, tabs_y, "TASKS", MenuTab::Clicking);
-    tab_button(game, ui_input, left + 210.0f, tabs_y, "GENERAL", MenuTab::General);
+    float tabs_y = 96.0f;
+    tab_button(game, ui_input, left, tabs_y, "Tasks", MenuTab::Clicking);
+    tab_button(game, ui_input, left + 168.0f, tabs_y, "General", MenuTab::General);
 
     if (game.menu_tab == MenuTab::Clicking) {
         draw_tasks_tab(game, ui_input, left);
@@ -742,7 +807,7 @@ void draw_results(const Game& game, int w, int h) {
     }
     bool new_best = prev_best < 0 || run.score > prev_best;
     int best = std::max(prev_best, run.score);
-    const char* scenario_title = run.kind == ScenarioKind::Tracking ? "WALL TRACKING" : "WALL CLICKING";
+    const char* scenario_title = run.kind == ScenarioKind::Tracking ? "Wall tracking" : "Wall clicking";
 
     float card_w = 560.0f;
     float card_h = 430.0f;
@@ -756,21 +821,21 @@ void draw_results(const Game& game, int w, int h) {
 
     char buf[64];
     float y = card_y + 30.0f;
-    centered(y, "CHALLENGE COMPLETE", 3.0f, 255, 70, 85); y += 50.0f;
+    centered(y, "Challenge complete", 3.0f, 255, 70, 85); y += 50.0f;
     centered(y, scenario_title, 2.0f, 230, 236, 244); y += 30.0f;
     centered(y, run.preset_name, 2.0f, 150, 162, 178); y += 56.0f;
 
-    centered(y, "SCORE", 2.0f, 150, 162, 178); y += 30.0f;
+    centered(y, "Score", 2.0f, 150, 162, 178); y += 30.0f;
     std::snprintf(buf, sizeof(buf), "%d", run.score);
     centered(y, buf, 6.0f, 245, 248, 252); y += 78.0f;
 
-    std::snprintf(buf, sizeof(buf), "ACCURACY %.1f%%   SHOTS %d", run.accuracy, run.shots);
+    std::snprintf(buf, sizeof(buf), "Accuracy %.1f%%   Shots %d", run.accuracy, run.shots);
     centered(y, buf, 2.0f, 210, 220, 232); y += 34.0f;
 
     if (new_best) {
-        centered(y, "NEW BEST", 2.4f, 255, 200, 90);
+        centered(y, "New best", 2.4f, 255, 200, 90);
     } else {
-        std::snprintf(buf, sizeof(buf), "BEST %d", best);
+        std::snprintf(buf, sizeof(buf), "Best %d", best);
         centered(y, buf, 2.0f, 150, 162, 178);
     }
     y += 40.0f;
@@ -783,5 +848,5 @@ void draw_results(const Game& game, int w, int h) {
         centered(y, datebuf, 1.7f, 120, 130, 145);
     }
 
-    centered(card_y + card_h - 28.0f, "CLICK OR ESC TO CONTINUE", 1.8f, 150, 162, 178);
+    centered(card_y + card_h - 28.0f, "Click or Esc to continue", 1.8f, 150, 162, 178);
 }
