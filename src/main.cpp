@@ -297,7 +297,7 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
         game.wall_preset_name.clear();
         menu_focus_field(game, FieldId::WallName);
     } else if (state_index == 2) {
-        game.wall_preset_name = "THIS NAME IS EXACTLY M";
+        game.wall_preset_name = "THIS NAME FILLS THE 32 CHAR MAXX";
         menu_focus_field(game, FieldId::WallName);
     } else if (state_index == 5) {
         // Focused numeric box mid-edit (validates the active value-box look).

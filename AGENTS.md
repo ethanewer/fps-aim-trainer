@@ -195,7 +195,14 @@ alignment, overflow, and focus highlighting.
   to a min==max range. Leftover `pill_preset` lines are ignored.)
   Default tasks live in `data/default-tasks.json` as size, wall (`close` / `mid` / `far`),
   a fixed target count, movement (`static` / `strafing` / `dynamic`), mode, and health.
-  Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`.
+  Clicking defaults are one-shot. Target-switching defaults are tracking copies of the
+  dynamic/strafe clicking tasks (health 20 on dynamic, 10 on strafe). Tracking defaults
+  are one small dynamic target with infinite health. A tracking task with one target
+  and infinite health spawns at the center of the spawn rectangle; clicking and
+  switching stay random.
+  Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`;
+  switching names include `SWITCHING` and the health value; tracking names include
+  `TRACKING`.
   Edit `scripts/default-tasks.py` and click **RESET TASKS** to re-run that script and
   replace every saved preset. The dumped list becomes the live builtin table for that
   session, so target-count edits (which change preset names) are not overwritten by the

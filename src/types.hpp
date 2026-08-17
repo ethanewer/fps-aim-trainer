@@ -18,6 +18,7 @@ inline constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
 inline constexpr float WALL_TARGET_RADIUS_MIN_M = 0.01f;
 inline constexpr float WALL_TARGET_RADIUS_MAX_M = 0.45f;
 inline constexpr int WALL_TARGET_HEALTH_MAX = 999;
+inline constexpr int PRESET_NAME_MAX = 32;
 // Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
 // a fixed rate so tracking quality becomes a discrete hit count.
 inline constexpr float CHALLENGE_DURATION_SEC = 60.0f;

@@ -10,6 +10,10 @@ A default task is:
     mode        clicking | tracking
     health      1 = one shot, N = N hits, 0 = infinite
 
+Clicking defaults are one-shot. Target-switching defaults are tracking with health
+20 on dynamic and 10 on strafe. Tracking defaults are one small dynamic target with
+infinite health.
+
 Edit DEFAULT_TASKS, then from the repo root:
 
     python scripts/default-tasks.py
@@ -177,6 +181,12 @@ class Task:
             f"1W{self.target_count}{self.size.name_suffix}",
             self.movement.preset_label,
         ]
+        if self.mode is Mode.TRACKING:
+            if int(self.health) > 0:
+                parts.append("SWITCHING")
+                parts.append(str(int(self.health)))
+            else:
+                parts.append("TRACKING")
         if self.wall is not Wall.MID:
             parts.append(self.wall.name)
         return " ".join(parts)
@@ -221,20 +231,62 @@ def task_from_json(item: dict) -> Task:
     )
 
 
-# Built-in clicking tasks. Add tracking with mode=Mode.TRACKING.
-# Mid wall is the default. Close/far append CLOSE or FAR to the name:
-#   Task(size=Size.NORMAL, targets=4, movement=Movement.DYNAMIC, wall=Wall.CLOSE)
+def _keep_size(wall: Wall, movement: Movement, size: Size) -> bool:
+    if movement == Movement.DYNAMIC and size == Size.EXTRA_SMALL:
+        return False
+    if wall == Wall.MID and movement != Movement.STATIC and size == Size.EXTRA_SMALL:
+        return False
+    return True
+
+
+def _targets_for_wall(wall: Wall) -> int:
+    return 2 if wall == Wall.MID else 4
+
+
+# Built-in tasks. Mid wall is the default. Close/far append CLOSE or FAR.
+# Clicking: one-shot. Switching: tracking copies of dynamic/strafe clicking
+# (dynamic health 20, strafe health 10). Tracking: one small dynamic target
+# with infinite health.
 DEFAULT_TASKS = []
 
 for wall in [Wall.MID, Wall.CLOSE]:
     for movement in [Movement.DYNAMIC, Movement.STRAFING, Movement.STATIC]:
         for size in [Size.NORMAL, Size.SMALL, Size.EXTRA_SMALL]:
-            if wall == Wall.MID and movement != Movement.STATIC and size == Size.EXTRA_SMALL:
+            if not _keep_size(wall, movement, size):
                 continue
-            if movement == Movement.DYNAMIC and size == Size.EXTRA_SMALL:
+            DEFAULT_TASKS.append(
+                Task(size=size, targets=_targets_for_wall(wall), movement=movement, wall=wall)
+            )
+
+for wall in [Wall.MID, Wall.CLOSE]:
+    for movement in [Movement.DYNAMIC, Movement.STRAFING]:
+        for size in [Size.NORMAL, Size.SMALL, Size.EXTRA_SMALL]:
+            if not _keep_size(wall, movement, size):
                 continue
-            targets = 2 if wall == Wall.MID else 4
-            DEFAULT_TASKS.append(Task(size=size, targets=targets, movement=movement, wall=wall))
+
+            health = 20 if movement == Movement.DYNAMIC else 10
+            DEFAULT_TASKS.append(
+                Task(
+                    size=size,
+                    targets=_targets_for_wall(wall),
+                    movement=movement,
+                    mode=Mode.TRACKING,
+                    health=health,
+                    wall=wall,
+                )
+            )
+
+for wall in [Wall.MID, Wall.CLOSE]:
+    DEFAULT_TASKS.append(
+        Task(
+            size=Size.SMALL,
+            targets=1,
+            movement=Movement.DYNAMIC,
+            mode=Mode.TRACKING,
+            health=0,
+            wall=wall,
+        )
+    )
 
 
 def _assert_names() -> None:
@@ -243,12 +295,18 @@ def _assert_names() -> None:
     mid = Task(size=Size.NORMAL, targets=3, movement=Movement.DYNAMIC)
     close = Task(size=Size.NORMAL, targets=3, movement=Movement.DYNAMIC, wall=Wall.CLOSE)
     far = Task(size=Size.SMALL, targets=6, movement=Movement.STRAFING, wall=Wall.FAR)
+    switch = Task(size=Size.NORMAL, targets=2, movement=Movement.DYNAMIC, mode=Mode.TRACKING, health=10)
+    track = Task(size=Size.SMALL, targets=1, movement=Movement.DYNAMIC, mode=Mode.TRACKING, health=0, wall=Wall.CLOSE)
     if mid.preset_name != "1W3T DYNAMIC":
         raise AssertionError(mid.preset_name)
     if close.preset_name != "1W3T DYNAMIC CLOSE":
         raise AssertionError(close.preset_name)
     if far.preset_name != "1W6TS STRAFE FAR":
         raise AssertionError(far.preset_name)
+    if switch.preset_name != "1W2T DYNAMIC SWITCHING 10":
+        raise AssertionError(switch.preset_name)
+    if track.preset_name != "1W1TS DYNAMIC TRACKING CLOSE":
+        raise AssertionError(track.preset_name)
 
 
 def _f(value: Number) -> str:
@@ -344,6 +402,9 @@ def write_outputs(
     names = [item.preset_name for item in task_list]
     if len(names) != len(set(names)):
         raise ValueError("default task names must be unique")
+    too_long = [name for name in names if len(name) > 32]
+    if too_long:
+        raise ValueError("default task names exceed 32 characters: " + ", ".join(too_long))
     if write_json:
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(_compact_json(task_list), encoding="utf-8")

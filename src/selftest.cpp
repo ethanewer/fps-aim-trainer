@@ -56,9 +56,20 @@ int run_self_test() {
         "1W4T STATIC CLOSE",
         "1W4TS STATIC CLOSE",
         "1W4TES STATIC CLOSE",
+        "1W2T DYNAMIC SWITCHING 20",
+        "1W2TS DYNAMIC SWITCHING 20",
+        "1W2T STRAFE SWITCHING 10",
+        "1W2TS STRAFE SWITCHING 10",
+        "1W4T DYNAMIC SWITCHING 20 CLOSE",
+        "1W4TS DYNAMIC SWITCHING 20 CLOSE",
+        "1W4T STRAFE SWITCHING 10 CLOSE",
+        "1W4TS STRAFE SWITCHING 10 CLOSE",
+        "1W4TES STRAFE SWITCHING 10 CLOSE",
+        "1W1TS DYNAMIC TRACKING",
+        "1W1TS DYNAMIC TRACKING CLOSE",
     };
     const int default_wall_count = static_cast<int>(sizeof(default_wall_order) / sizeof(default_wall_order[0]));
-    ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking presets") && ok;
+    ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking, switching, and tracking presets") && ok;
     for (int i = 0; i < default_wall_count && i < static_cast<int>(game.wall_presets.size()); ++i) {
         ok = self_test_check(game.wall_presets[i].name == default_wall_order[i], "default wall presets are in sensible order") && ok;
     }
@@ -74,6 +85,12 @@ int run_self_test() {
     ok = self_test_check(static_index >= 0 && game.wall_presets[static_index].settings.target_count_min == 2 && game.wall_presets[static_index].settings.horizontal_speed_max == 0.0f, "static 1W2T default is non-moving") && ok;
     ok = self_test_check(static_extra_index >= 0 && game.wall_presets[static_extra_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[static_extra_index].settings.radius_min - 0.02f) < 0.0001f && game.wall_presets[static_extra_index].settings.horizontal_speed_max == 0.0f, "static 1W2TES default is non-moving extra-small") && ok;
     ok = self_test_check(close_index >= 0 && std::fabs(game.wall_presets[close_index].settings.wall_distance_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[close_index].settings.wall_distance_max - 5.0f) < 0.0001f, "close default uses a 4-5m wall range") && ok;
+    int switch_index = find_wall_preset(game, "1W2T DYNAMIC SWITCHING 20");
+    int switch_strafe_index = find_wall_preset(game, "1W2T STRAFE SWITCHING 10");
+    int track_index = find_wall_preset(game, "1W1TS DYNAMIC TRACKING");
+    ok = self_test_check(switch_index >= 0 && game.wall_presets[switch_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_index].settings.target_health == 20 && game.wall_presets[switch_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[switch_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "target-switching default copies dynamic clicking motion with 20 health") && ok;
+    ok = self_test_check(switch_strafe_index >= 0 && game.wall_presets[switch_strafe_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_strafe_index].settings.target_health == 10 && std::fabs(game.wall_presets[switch_strafe_index].settings.vertical_speed_max) < 0.0001f, "strafe switching default uses 10 health") && ok;
+    ok = self_test_check(track_index >= 0 && game.wall_presets[track_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[track_index].settings.target_health == 0 && game.wall_presets[track_index].settings.target_count_min == 1 && std::fabs(game.wall_presets[track_index].settings.radius_min - 0.04f) < 0.0001f, "tracking default is one small dynamic target with infinite health") && ok;
     for (const WallPreset& preset : game.wall_presets) {
         bool close_wall = preset.name.size() >= 6 && preset.name.compare(preset.name.size() - 6, 6, " CLOSE") == 0;
         float expected_min = close_wall ? 4.0f : 8.0f;
@@ -254,6 +271,7 @@ int run_self_test() {
     game.wall_presets.push_back({"CLICK PRESET 4", game.wall_settings});
     std::string unique_click = unique_preset_name(game.wall_presets, "CLICK PRESET 4", -1);
     ok = self_test_check(unique_click != "CLICK PRESET 4", "generated wall preset names avoid duplicates") && ok;
+    ok = self_test_check(sanitize_preset_name("1W4TES STRAFE SWITCHING 20 CLOSE") == "1W4TES STRAFE SWITCHING 20 CLOSE", "preset name limit keeps switching CLOSE labels") && ok;
 
     game.wall_presets = {{"ONLY WALL", WallClickSettings{}}};
     game.selected_wall_preset = 0;
@@ -274,7 +292,7 @@ int run_self_test() {
         reset_test.wall_preset_scroll = 1;
         reset_test.active_field = FieldId::WallName;
         reset_wall_presets(reset_test);
-        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 15 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
+        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 26 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
         ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W2T DYNAMIC", "reset tasks selects the first default task") && ok;
         ok = self_test_check(std::fabs(reset_test.wall_settings.radius_min - 0.08f) < 0.0001f && std::fabs(reset_test.wall_settings.horizontal_speed_max - 1.5f) < 0.0001f, "reset tasks restores compiled default settings") && ok;
         ok = self_test_check(reset_test.active_field == FieldId::None, "reset tasks exits text edit mode") && ok;
@@ -924,6 +942,58 @@ int run_self_test() {
     normalize_settings(wall_flat);
     Target flat_target = spawn_wall_target(wall_flat);
     ok = self_test_check(std::fabs(flat_target.distance - 7.0f) < 0.001f, "equal min and max distance spawns all targets on one plane") && ok;
+
+    Game center_spawn;
+    center_spawn.rng.seed(616);
+    center_spawn.wall_settings.task_mode = TaskMode::Tracking;
+    center_spawn.wall_settings.target_health = 0;
+    center_spawn.wall_settings.target_count_min = 1;
+    center_spawn.wall_settings.target_count_max = 1;
+    center_spawn.wall_settings.wall_distance_min = 4.0f;
+    center_spawn.wall_settings.wall_distance_max = 12.0f;
+    center_spawn.wall_settings.radius_min = 0.10f;
+    center_spawn.wall_settings.radius_max = 0.10f;
+    normalize_settings(center_spawn);
+    float center_radius = wall_to_units(0.10f);
+    float center_distance = 8.0f;
+    float center_height = wall_height_for_distance(center_distance);
+    float expected_x = 0.0f;
+    float expected_y = (center_height * 0.16f + center_radius + center_height * 0.84f - center_radius) * 0.5f;
+    bool center_stable = true;
+    for (int i = 0; i < 16; ++i) {
+        Target target = spawn_wall_target(center_spawn);
+        center_stable = center_stable && std::fabs(target.distance - center_distance) < 0.001f && std::fabs(target.pos.x - expected_x) < 0.001f && std::fabs(target.pos.y - expected_y) < 0.001f;
+    }
+    ok = self_test_check(center_stable, "single infinite tracking target spawns at the center of the spawn rectangle") && ok;
+
+    Game switch_spawn = center_spawn;
+    switch_spawn.rng.seed(617);
+    switch_spawn.wall_settings.target_health = 10;
+    switch_spawn.wall_settings.target_count_min = 2;
+    switch_spawn.wall_settings.target_count_max = 2;
+    normalize_settings(switch_spawn);
+    bool switch_varied = false;
+    Target switch_first = spawn_wall_target(switch_spawn);
+    for (int i = 0; i < 24; ++i) {
+        Target target = spawn_wall_target(switch_spawn);
+        switch_varied = switch_varied || std::fabs(target.pos.x - switch_first.pos.x) > 0.01f || std::fabs(target.pos.y - switch_first.pos.y) > 0.01f || std::fabs(target.distance - switch_first.distance) > 0.01f;
+    }
+    ok = self_test_check(switch_varied, "target-switching spawns randomly like clicking") && ok;
+
+    Game click_one = center_spawn;
+    click_one.rng.seed(618);
+    click_one.wall_settings.task_mode = TaskMode::Clicking;
+    click_one.wall_settings.target_health = 0;
+    click_one.wall_settings.target_count_min = 1;
+    click_one.wall_settings.target_count_max = 1;
+    normalize_settings(click_one);
+    bool click_one_varied = false;
+    Target click_one_first = spawn_wall_target(click_one);
+    for (int i = 0; i < 24; ++i) {
+        Target target = spawn_wall_target(click_one);
+        click_one_varied = click_one_varied || std::fabs(target.pos.x - click_one_first.pos.x) > 0.01f || std::fabs(target.pos.y - click_one_first.pos.y) > 0.01f;
+    }
+    ok = self_test_check(click_one_varied, "clicking does not use the tracking center spawn") && ok;
 
     Game hit_sound_test;
     init_scenarios(hit_sound_test);

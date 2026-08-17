@@ -134,6 +134,105 @@
       "movement": "static",
       "mode": "clicking",
       "health": 1
+    },
+    {
+      "name": "1W2T DYNAMIC SWITCHING 20",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W2TS DYNAMIC SWITCHING 20",
+      "size": "small",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W2T STRAFE SWITCHING 10",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
+      "name": "1W2TS STRAFE SWITCHING 10",
+      "size": "small",
+      "wall": "mid",
+      "targets": 2,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
+      "name": "1W4T DYNAMIC SWITCHING 20 CLOSE",
+      "size": "normal",
+      "wall": "close",
+      "targets": 4,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W4TS DYNAMIC SWITCHING 20 CLOSE",
+      "size": "small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W4T STRAFE SWITCHING 10 CLOSE",
+      "size": "normal",
+      "wall": "close",
+      "targets": 4,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
+      "name": "1W4TS STRAFE SWITCHING 10 CLOSE",
+      "size": "small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
+      "name": "1W4TES STRAFE SWITCHING 10 CLOSE",
+      "size": "extra_small",
+      "wall": "close",
+      "targets": 4,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
+      "name": "1W1TS DYNAMIC TRACKING",
+      "size": "small",
+      "wall": "mid",
+      "targets": 1,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 0
+    },
+    {
+      "name": "1W1TS DYNAMIC TRACKING CLOSE",
+      "size": "small",
+      "wall": "close",
+      "targets": 1,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 0
     }
   ]
 }

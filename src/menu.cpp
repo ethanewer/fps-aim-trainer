@@ -220,7 +220,7 @@ void menu_handle_edit(Game& g, const Input& input) {
     size_t max_len = d.kind == FieldDesc::FloatVal ? 6 : 5;
     for (char c : input.text_input) {
         if (d.kind == FieldDesc::Name) {
-            if (is_allowed_preset_char(c) && g.edit_draft.size() < 22) {
+            if (is_allowed_preset_char(c) && g.edit_draft.size() < static_cast<size_t>(PRESET_NAME_MAX)) {
                 g.edit_draft.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
             }
             continue;

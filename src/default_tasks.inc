@@ -37,5 +37,16 @@ static const DefaultTaskDef kDefaultTasks[] = {
     {"1W4T STATIC CLOSE", 0, 1, 4, 4, 4.0f, 5.0f, 0.08f, 0.08f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
     {"1W4TS STATIC CLOSE", 0, 1, 4, 4, 4.0f, 5.0f, 0.04f, 0.04f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
     {"1W4TES STATIC CLOSE", 0, 1, 4, 4, 4.0f, 5.0f, 0.02f, 0.02f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+    {"1W2T DYNAMIC SWITCHING 20", 1, 20, 2, 2, 8.0f, 10.0f, 0.08f, 0.08f, 1.0f, 1.5f, 0.0f, 0.75f, 8.0f, 8.0f, 1.0f, 2.0f},
+    {"1W2TS DYNAMIC SWITCHING 20", 1, 20, 2, 2, 8.0f, 10.0f, 0.04f, 0.04f, 1.0f, 1.5f, 0.0f, 0.75f, 8.0f, 8.0f, 1.0f, 2.0f},
+    {"1W2T STRAFE SWITCHING 10", 1, 10, 2, 2, 8.0f, 10.0f, 0.08f, 0.08f, 1.0f, 1.5f, 0.0f, 0.0f, 8.0f, 8.0f, 1.0f, 4.0f},
+    {"1W2TS STRAFE SWITCHING 10", 1, 10, 2, 2, 8.0f, 10.0f, 0.04f, 0.04f, 1.0f, 1.5f, 0.0f, 0.0f, 8.0f, 8.0f, 1.0f, 4.0f},
+    {"1W4T DYNAMIC SWITCHING 20 CLOSE", 1, 20, 4, 4, 4.0f, 5.0f, 0.08f, 0.08f, 1.0f, 1.5f, 0.0f, 0.75f, 8.0f, 8.0f, 1.0f, 2.0f},
+    {"1W4TS DYNAMIC SWITCHING 20 CLOSE", 1, 20, 4, 4, 4.0f, 5.0f, 0.04f, 0.04f, 1.0f, 1.5f, 0.0f, 0.75f, 8.0f, 8.0f, 1.0f, 2.0f},
+    {"1W4T STRAFE SWITCHING 10 CLOSE", 1, 10, 4, 4, 4.0f, 5.0f, 0.08f, 0.08f, 1.0f, 1.5f, 0.0f, 0.0f, 8.0f, 8.0f, 1.0f, 4.0f},
+    {"1W4TS STRAFE SWITCHING 10 CLOSE", 1, 10, 4, 4, 4.0f, 5.0f, 0.04f, 0.04f, 1.0f, 1.5f, 0.0f, 0.0f, 8.0f, 8.0f, 1.0f, 4.0f},
+    {"1W4TES STRAFE SWITCHING 10 CLOSE", 1, 10, 4, 4, 4.0f, 5.0f, 0.02f, 0.02f, 1.0f, 1.5f, 0.0f, 0.0f, 8.0f, 8.0f, 1.0f, 4.0f},
+    {"1W1TS DYNAMIC TRACKING", 1, 0, 1, 1, 8.0f, 10.0f, 0.04f, 0.04f, 1.0f, 1.5f, 0.0f, 0.75f, 8.0f, 8.0f, 1.0f, 2.0f},
+    {"1W1TS DYNAMIC TRACKING CLOSE", 1, 0, 1, 1, 4.0f, 5.0f, 0.04f, 0.04f, 1.0f, 1.5f, 0.0f, 0.75f, 8.0f, 8.0f, 1.0f, 2.0f},
 };
 

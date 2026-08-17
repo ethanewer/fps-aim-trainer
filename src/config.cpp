@@ -48,7 +48,7 @@ std::string sanitize_preset_name(const std::string& raw) {
         unsigned char uc = static_cast<unsigned char>(c);
         char up = static_cast<char>(std::toupper(uc));
         if ((up >= 'A' && up <= 'Z') || (up >= '0' && up <= '9') || up == ' ' || up == '-' || up == '_') {
-            if (name.size() < 22) {
+            if (name.size() < static_cast<size_t>(PRESET_NAME_MAX)) {
                 name.push_back(up);
             }
         }
@@ -71,7 +71,7 @@ bool is_allowed_preset_char(char c) {
 std::string filter_preset_name_draft(const std::string& raw) {
     std::string name;
     for (char c : raw) {
-        if (is_allowed_preset_char(c) && name.size() < 22) {
+        if (is_allowed_preset_char(c) && name.size() < static_cast<size_t>(PRESET_NAME_MAX)) {
             name.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
         }
     }

@@ -36,10 +36,18 @@ float wall_change_timer(Game& game) {
     return rand_wall_range(game, game.wall_settings.change_min, game.wall_settings.change_max);
 }
 
+static bool uses_center_wall_spawn(const Game& game) {
+    return is_tracking(game.wall_settings.task_mode) && game.wall_settings.target_health <= 0 && game.wall_settings.target_count_min == 1;
+}
+
 Target spawn_wall_target(Game& game, int skip_index) {
     float radius = wall_to_units(rand_wall_range(game, game.wall_settings.radius_min, game.wall_settings.radius_max));
-    // Each target picks its own depth in the configured range, so it can spawn closer.
-    float distance = rand_wall_range(game, game.wall_settings.wall_distance_min, game.wall_settings.wall_distance_max);
+    // Single-target infinite tracking starts in the middle of the spawn rectangle.
+    // Clicking and target-switching keep a random spawn in that same rectangle.
+    bool center_spawn = uses_center_wall_spawn(game);
+    float distance = center_spawn
+        ? 0.5f * (game.wall_settings.wall_distance_min + game.wall_settings.wall_distance_max)
+        : rand_wall_range(game, game.wall_settings.wall_distance_min, game.wall_settings.wall_distance_max);
     float wall_width = wall_width_for_distance(distance);
     float wall_height = wall_height_for_distance(distance);
     float wall_z = wall_z_from_distance(distance);
@@ -49,6 +57,11 @@ Target spawn_wall_target(Game& game, int skip_index) {
     float max_y = wall_height * 0.84f - radius;
     Vec3 pos{0.0f, ROOM_EYE_HEIGHT, wall_z + 0.45f};
     bool placed = false;
+    if (center_spawn) {
+        pos.x = (min_x + max_x) * 0.5f;
+        pos.y = (min_y + max_y) * 0.5f;
+        placed = true;
+    }
     for (int attempt = 0; attempt < 300 && !placed; ++attempt) {
         pos.x = rand_range(game, min_x, max_x);
         pos.y = rand_range(game, min_y, max_y);
