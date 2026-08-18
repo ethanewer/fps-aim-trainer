@@ -238,22 +238,32 @@ int run_self_test() {
     normalize_settings(game);
     ok = self_test_check(std::fabs(game.wall_settings.radius_min - 0.01f) < 0.0001f, "wall target radius clamps below 0.01m") && ok;
 
-    game.menu_tab = MenuTab::General;
+    game.menu_tab = MenuTab::Settings;
     menu_focus_field(game, FieldId::GenThick);
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenTargetR, "general tab navigation reaches target color red") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenTargetR, "settings tab navigation reaches target color red") && ok;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenTargetG, "general tab navigation reaches target color green") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenTargetG, "settings tab navigation reaches target color green") && ok;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenTargetB, "general tab navigation reaches target color blue") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenTargetB, "settings tab navigation reaches target color blue") && ok;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenWallR, "general tab navigation reaches wall color red") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenWallR, "settings tab navigation reaches wall color red") && ok;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenWallG, "general tab navigation reaches wall color green") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenWallG, "settings tab navigation reaches wall color green") && ok;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenWallB, "general tab navigation reaches wall color blue") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenWallB, "settings tab navigation reaches wall color blue") && ok;
     menu_handle_edit(game, tab_fwd);
-    ok = self_test_check(game.active_field == FieldId::GenSens, "general tab navigation wraps after wall color") && ok;
+    ok = self_test_check(game.active_field == FieldId::GenSens, "settings tab navigation wraps after wall color") && ok;
+    menu_blur_field(game);
+
+    game.menu_tab = MenuTab::Playlists;
+    menu_focus_field(game, FieldId::PlaylistSearch);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::PlaylistName, "playlist tab navigation advances from search to name") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::PlaylistAddSearch, "playlist tab navigation advances from name to add search") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::PlaylistSearch, "playlist tab navigation wraps after add search") && ok;
     menu_blur_field(game);
 
     game.selected_wall_preset = 0;
@@ -559,6 +569,58 @@ int run_self_test() {
     Game v10_loaded;
     load_settings(v10_loaded);
     ok = self_test_check(std::fabs(v10_loaded.wall_settings.wall_distance_min - 5.0f) < 0.0001f && std::fabs(v10_loaded.wall_settings.wall_distance_max - 6.0f) < 0.0001f, "v10 built-in wall range is not rewritten") && ok;
+    ok = self_test_check(v10_loaded.playlists.empty(), "v10 settings load with no playlists") && ok;
+
+    {
+        Game playlist_save;
+        ensure_presets(playlist_save);
+        playlist_save.playlists = {
+            {"WARMUP", {"1W2T DYNAMIC", "1W2T STRAFE", "MISSING TASK"}},
+            {"TRACK SET", {"1W1TS DYNAMIC TRACKING"}},
+        };
+        playlist_save.selected_playlist = 1;
+        save_settings(playlist_save);
+        Game playlist_loaded;
+        load_settings(playlist_loaded);
+        ok = self_test_check(static_cast<int>(playlist_loaded.playlists.size()) == 2, "v11 playlists round-trip") && ok;
+        ok = self_test_check(playlist_loaded.playlists[0].name == "WARMUP" && playlist_loaded.playlists[0].task_names.size() == 2 && playlist_loaded.playlists[0].task_names[0] == "1W2T DYNAMIC" && playlist_loaded.playlists[0].task_names[1] == "1W2T STRAFE", "missing playlist tasks are dropped and kept tasks load in order") && ok;
+        ok = self_test_check(playlist_loaded.selected_playlist == 1 && playlist_loaded.playlist_name == "TRACK SET", "selected playlist loads into the editor") && ok;
+    }
+
+    {
+        Game rename_pl;
+        ensure_presets(rename_pl);
+        rename_pl.playlists = {{"WARMUP", {"1W2T DYNAMIC", "1W2T STRAFE"}}};
+        int renamed = find_wall_preset(rename_pl, "1W2T DYNAMIC");
+        ok = self_test_check(renamed >= 0, "rename test finds the dynamic preset") && ok;
+        rename_pl.selected_wall_preset = renamed;
+        apply_selected_presets(rename_pl);
+        rename_pl.wall_preset_name = "RENAMED TASK";
+        save_current_wall_preset(rename_pl);
+        ok = self_test_check(rename_pl.playlists[0].task_names[0] == "RENAMED TASK" && rename_pl.playlists[0].task_names[1] == "1W2T STRAFE", "renaming a task updates playlist entries") && ok;
+    }
+
+    {
+        Game delete_pl;
+        ensure_presets(delete_pl);
+        delete_pl.wall_presets.push_back({"MY TASK", WallClickSettings{}});
+        delete_pl.playlists = {{"WARMUP", {"MY TASK", "1W2T DYNAMIC"}}};
+        delete_pl.selected_wall_preset = static_cast<int>(delete_pl.wall_presets.size()) - 1;
+        apply_selected_presets(delete_pl);
+        delete_wall_preset(delete_pl);
+        ok = self_test_check(delete_pl.playlists[0].task_names.size() == 1 && delete_pl.playlists[0].task_names[0] == "1W2T DYNAMIC", "deleting a task drops matching playlist entries") && ok;
+    }
+
+    {
+        Game empty_play;
+        ensure_presets(empty_play);
+        init_scenarios(empty_play);
+        ok = self_test_check(!start_playlist(empty_play) && empty_play.mode == AppMode::Menu, "play is a no-op on an empty playlist") && ok;
+        empty_play.playlists = {{"EMPTY", {}}};
+        empty_play.selected_playlist = 0;
+        ok = self_test_check(!start_playlist(empty_play) && empty_play.mode == AppMode::Menu, "play is a no-op when the selected playlist has no tasks") && ok;
+    }
+
     std::remove(g_settings_path_override.c_str());
     g_settings_path_override.clear();
 
@@ -1062,6 +1124,56 @@ int run_self_test() {
     update_playing(hit_sound_test, hit_click, 1.0f / 120.0f);
     ok = self_test_check(hit_sound_test.stats.hits == 1 && hit_sound_test.pending_hit_sounds == 1, "wall hit queues one hit sound event") && ok;
 
+    {
+        Game space_click;
+        init_scenarios(space_click);
+        space_click.wall_settings.task_mode = TaskMode::Clicking;
+        space_click.wall_settings.target_count_min = 1;
+        space_click.wall_settings.target_count_max = 1;
+        space_click.wall_settings.radius_min = 0.4f;
+        space_click.wall_settings.radius_max = 0.4f;
+        space_click.wall_settings.horizontal_speed_min = 0.0f;
+        space_click.wall_settings.horizontal_speed_max = 0.0f;
+        space_click.wall_settings.vertical_speed_min = 0.0f;
+        space_click.wall_settings.vertical_speed_max = 0.0f;
+        normalize_settings(space_click);
+        start_scenario(space_click, space_click.scenarios[0], RunMode::Practice);
+        float dist = space_click.wall_settings.wall_distance_max;
+        space_click.targets = {{
+            {0.0f, ROOM_EYE_HEIGHT, wall_z_from_distance(dist) + 0.45f},
+            {0.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 0.0f},
+            1000.0f,
+            wall_to_units(space_click.wall_settings.radius_min),
+            0.0f,
+            dist,
+        }};
+        Input space;
+        space.space_pressed = true;
+        update_playing(space_click, space, 1.0f / 120.0f);
+        ok = self_test_check(space_click.stats.shots == 1 && space_click.stats.hits == 1, "space fires a clicking shot") && ok;
+
+        Game space_track;
+        init_scenarios(space_track);
+        space_track.wall_settings.task_mode = TaskMode::Tracking;
+        space_track.wall_settings.target_health = 0;
+        space_track.wall_settings.target_count_min = 1;
+        space_track.wall_settings.target_count_max = 1;
+        normalize_settings(space_track);
+        start_scenario(space_track, space_track.scenarios[0], RunMode::Practice);
+        Input hold_space;
+        hold_space.space_down = true;
+        update_playing(space_track, hold_space, 1.0f / TRACKING_FIRE_HZ);
+        ok = self_test_check(space_track.stats.tracking_fire_time > 0.0f, "holding space fires in tracking practice") && ok;
+        Input both;
+        both.left_pressed = true;
+        both.space_pressed = true;
+        Game both_click = space_click;
+        both_click.stats = {};
+        update_playing(both_click, both, 1.0f / 120.0f);
+        ok = self_test_check(both_click.stats.shots == 1, "space and mouse1 in the same frame still fire one clicking shot") && ok;
+    }
+
 
     // Tracking health: 0 is infinite; a positive value respawns after that many hits.
     {
@@ -1246,6 +1358,101 @@ int run_self_test() {
             update_playing(pr, none, 1.0f / 120.0f);
         }
         ok = self_test_check(pr.mode == AppMode::Playing && pr.stats.shots == 0, "practice tracking neither auto-fires nor times out") && ok;
+
+        std::remove(g_runs_path_override.c_str());
+        g_runs_path_override.clear();
+    }
+
+    {
+        g_runs_path_override = "build/self-test-runs.cfg";
+        std::remove(g_runs_path_override.c_str());
+
+        Game pl;
+        pl.rng.seed(3);
+        ensure_presets(pl);
+        init_scenarios(pl);
+        int first = find_wall_preset(pl, "1W2T DYNAMIC");
+        int second = find_wall_preset(pl, "1W2T STRAFE");
+        ok = self_test_check(first >= 0 && second >= 0, "playlist play test finds two default tasks") && ok;
+        pl.playlists = {{"WARMUP", {pl.wall_presets[first].name, pl.wall_presets[second].name}}};
+        pl.selected_playlist = 0;
+        ok = self_test_check(start_playlist(pl), "start_playlist begins the first task") && ok;
+        ok = self_test_check(pl.mode == AppMode::Playing && pl.run_mode == RunMode::Challenge && pl.wall_preset_name == "1W2T DYNAMIC", "playlist starts a challenge on the first task") && ok;
+        ok = self_test_check(pl.playlist_active && !pl.playlist_complete && pl.playlist_play_index == 0, "playlist session tracks the first task") && ok;
+
+        Input none;
+        pl.challenge_time_left = 0.0f;
+        update_playing(pl, none, 1.0f / 120.0f);
+        ok = self_test_check(pl.mode == AppMode::Results && !pl.playlist_complete, "first playlist task shows mid-playlist results") && ok;
+        ok = self_test_check(static_cast<int>(pl.playlist_session_runs.size()) == 1, "first playlist task is recorded in the session") && ok;
+
+        handle_results_continue(pl);
+        ok = self_test_check(pl.mode == AppMode::Playing && pl.wall_preset_name == "1W2T STRAFE" && pl.playlist_play_index == 1, "continuing a playlist starts the next task") && ok;
+
+        pl.challenge_time_left = 0.0f;
+        update_playing(pl, none, 1.0f / 120.0f);
+        ok = self_test_check(pl.mode == AppMode::Results && pl.playlist_complete, "last playlist task shows the playlist summary") && ok;
+        ok = self_test_check(static_cast<int>(pl.playlist_session_runs.size()) == 2, "playlist session records every finished task") && ok;
+
+        handle_results_continue(pl);
+        ok = self_test_check(pl.mode == AppMode::Menu && !pl.playlist_active && !pl.playlist_paused, "finishing a playlist returns to the menu") && ok;
+
+        Game mid;
+        mid.rng.seed(4);
+        ensure_presets(mid);
+        init_scenarios(mid);
+        mid.playlists = {{"WARMUP", {mid.wall_presets[first].name, mid.wall_presets[second].name}}};
+        mid.selected_playlist = 0;
+        start_playlist(mid);
+        mid.challenge_time_left = 0.0f;
+        update_playing(mid, none, 1.0f / 120.0f);
+        abort_to_menu(mid);
+        ok = self_test_check(mid.mode == AppMode::Menu && !mid.playlist_active && mid.playlist_paused, "esc mid-playlist returns to the menu without starting the next task") && ok;
+        ok = self_test_check(mid.playlist_play_index == 1 && static_cast<int>(mid.playlist_session_runs.size()) == 1, "esc from mid-playlist results keeps the finished task and advances to the next") && ok;
+        ok = self_test_check(playlist_can_resume(mid), "esc mid-playlist leaves a resumable session") && ok;
+        ok = self_test_check(resume_playlist(mid), "resume_playlist starts the unfinished task") && ok;
+        ok = self_test_check(mid.mode == AppMode::Playing && mid.wall_preset_name == "1W2T STRAFE" && mid.playlist_play_index == 1, "resume continues from the next playlist task") && ok;
+        ok = self_test_check(static_cast<int>(mid.playlist_session_runs.size()) == 1 && !mid.playlist_paused, "resume keeps prior session scores") && ok;
+
+        Game from_task;
+        from_task.rng.seed(5);
+        ensure_presets(from_task);
+        init_scenarios(from_task);
+        from_task.playlists = {{"WARMUP", {from_task.wall_presets[first].name, from_task.wall_presets[second].name}}};
+        from_task.selected_playlist = 0;
+        ok = self_test_check(start_playlist(from_task, 1), "start_playlist can begin at a later entry") && ok;
+        ok = self_test_check(from_task.mode == AppMode::Playing && from_task.wall_preset_name == "1W2T STRAFE" && from_task.playlist_play_index == 1, "playing from a later entry starts that task") && ok;
+
+        Game abort_task;
+        abort_task.rng.seed(6);
+        ensure_presets(abort_task);
+        init_scenarios(abort_task);
+        abort_task.playlists = {{"WARMUP", {abort_task.wall_presets[first].name, abort_task.wall_presets[second].name}}};
+        abort_task.selected_playlist = 0;
+        start_playlist(abort_task);
+        abort_to_menu(abort_task);
+        ok = self_test_check(abort_task.playlist_paused && abort_task.playlist_play_index == 0 && abort_task.playlist_session_runs.empty(), "esc during a playlist task pauses on that unfinished task") && ok;
+        ok = self_test_check(resume_playlist(abort_task) && abort_task.mode == AppMode::Playing && abort_task.wall_preset_name == "1W2T DYNAMIC", "resume after esc during a task restarts that task") && ok;
+        abort_to_menu(abort_task);
+        ok = self_test_check(start_playlist(abort_task, 0) && abort_task.playlist_play_index == 0 && abort_task.playlist_session_runs.empty() && !abort_task.playlist_paused, "play starts the playlist from the beginning and clears a pause") && ok;
+
+        Game other;
+        other.rng.seed(7);
+        ensure_presets(other);
+        init_scenarios(other);
+        other.playlists = {
+            {"WARMUP", {other.wall_presets[first].name, other.wall_presets[second].name}},
+            {"OTHER", {other.wall_presets[first].name}},
+        };
+        other.selected_playlist = 0;
+        start_playlist(other);
+        abort_to_menu(other);
+        other.selected_playlist = 1;
+        apply_selected_playlist(other);
+        ok = self_test_check(!playlist_can_resume(other), "resume is only offered for the paused playlist") && ok;
+        ok = self_test_check(!resume_playlist(other) && other.playlist_paused, "resume is a no-op on a different playlist") && ok;
+        start_playlist(other, 0);
+        ok = self_test_check(other.mode == AppMode::Playing && !other.playlist_paused && other.playlist_play_name == "OTHER", "play starts a new session and clears the previous pause") && ok;
 
         std::remove(g_runs_path_override.c_str());
         g_runs_path_override.clear();

@@ -291,55 +291,135 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
     load_settings(game);
     load_runs(game);
     init_scenarios(game);
-    if (tab_index >= 1) game.menu_tab = MenuTab::General;
-    else game.menu_tab = MenuTab::Clicking;
-    if (state_index == 1) {
-        game.wall_preset_name.clear();
-        menu_focus_field(game, FieldId::WallName);
-    } else if (state_index == 2) {
-        game.wall_preset_name = "THIS NAME FILLS THE 32 CHAR MAXX";
-        menu_focus_field(game, FieldId::WallName);
-    } else if (state_index == 5) {
-        // Focused numeric box mid-edit (validates the active value-box look).
-        menu_focus_field(game, FieldId::WallRadiusMin);
-        game.edit_draft = "0.12";
-        game.edit_fresh = false;
-    } else if (state_index == 3) {
-        for (int i = 0; i < 12; ++i) {
-            char name[32];
-            std::snprintf(name, sizeof(name), "LONG PRESET NAME %02d", i + 1);
-            game.wall_presets.push_back({name, game.wall_settings});
+    if (tab_index == 1) {
+        game.menu_tab = MenuTab::Playlists;
+        if (state_index == 1) {
+            game.playlists.clear();
+            game.selected_playlist = 0;
+            game.playlist_name.clear();
+        } else if (state_index == 2) {
+            if (game.playlists.empty()) {
+                game.playlists.push_back({"WARMUP", {}});
+            }
+            game.selected_playlist = 0;
+            game.playlist_name = "THIS NAME FILLS THE 32 CHAR MAXX";
+            menu_focus_field(game, FieldId::PlaylistName);
+        } else if (state_index == 3) {
+            for (int i = 0; i < 12; ++i) {
+                char name[32];
+                std::snprintf(name, sizeof(name), "LONG PLAYLIST NAME %02d", i + 1);
+                game.playlists.push_back({name, {}});
+            }
+            game.selected_playlist = static_cast<int>(game.playlists.size()) - 1;
+            game.playlist_scroll = std::max(0, static_cast<int>(game.playlists.size()) - VISIBLE_PLAYLIST_ROWS);
+            apply_selected_playlist(game);
+        } else if (state_index == 7) {
+            if (game.playlists.empty()) {
+                game.playlists.push_back({"WARMUP", {}});
+                game.selected_playlist = 0;
+            }
+            apply_selected_playlist(game);
+            menu_focus_field(game, FieldId::PlaylistAddSearch);
+            game.edit_draft = "strafe";
+            game.edit_fresh = false;
+        } else if (state_index == 9) {
+            if (game.playlists.empty()) {
+                Playlist sample;
+                sample.name = "WARMUP";
+                if (game.wall_presets.size() >= 2) {
+                    sample.task_names.push_back(game.wall_presets[0].name);
+                    sample.task_names.push_back(game.wall_presets[1].name);
+                } else if (!game.wall_presets.empty()) {
+                    sample.task_names.push_back(game.wall_presets[0].name);
+                }
+                game.playlists.push_back(sample);
+            }
+            game.selected_playlist = 0;
+            apply_selected_playlist(game);
+            game.playlist_paused = true;
+            game.playlist_play_name = game.playlists[0].name;
+            game.playlist_play_tasks = game.playlists[0].task_names;
+            game.playlist_play_index = std::min(1, std::max(0, static_cast<int>(game.playlist_play_tasks.size()) - 1));
+            if (!game.playlist_play_tasks.empty()) {
+                RunRecord prior;
+                prior.preset_name = game.playlist_play_tasks[0];
+                prior.score = 42;
+                game.playlist_session_runs = {prior};
+            }
+        } else {
+            if (game.playlists.empty()) {
+                Playlist sample;
+                sample.name = "WARMUP";
+                if (game.wall_presets.size() >= 2) {
+                    sample.task_names.push_back(game.wall_presets[0].name);
+                    sample.task_names.push_back(game.wall_presets[1].name);
+                } else if (!game.wall_presets.empty()) {
+                    sample.task_names.push_back(game.wall_presets[0].name);
+                }
+                game.playlists.push_back(sample);
+            }
+            if (state_index == 8) {
+                Playlist long_list;
+                long_list.name = "LONG SET";
+                int preset_count = static_cast<int>(game.wall_presets.size());
+                for (int i = 0; i < 20 && preset_count > 0; ++i) {
+                    long_list.task_names.push_back(game.wall_presets[i % preset_count].name);
+                }
+                game.playlists = {long_list};
+                game.selected_playlist = 0;
+                game.playlist_entry_scroll = std::max(0, static_cast<int>(long_list.task_names.size()) - VISIBLE_PLAYLIST_ENTRY_ROWS);
+            }
+            apply_selected_playlist(game);
         }
-        ensure_presets(game);
-        game.wall_preset_scroll = std::max(0, static_cast<int>(game.wall_presets.size()) - VISIBLE_PRESET_ROWS);
-    } else if (state_index == 4) {
+    } else if (tab_index <= 0) {
         game.menu_tab = MenuTab::Clicking;
-        game.wall_preset_name = "MAX RANGE STRESS TEST";
-        game.wall_settings.target_count_min = 18;
-        game.wall_settings.target_count_max = 18;
-        game.wall_settings.wall_distance_min = 2.0f;
-        game.wall_settings.wall_distance_max = 30.0f;
-        game.wall_settings.radius_min = 0.44f;
-        game.wall_settings.radius_max = 0.45f;
-        game.wall_settings.horizontal_speed_min = 7.90f;
-        game.wall_settings.horizontal_speed_max = 8.00f;
-        game.wall_settings.vertical_speed_min = 7.90f;
-        game.wall_settings.vertical_speed_max = 8.00f;
-        game.wall_settings.acceleration_min = 39.5f;
-        game.wall_settings.acceleration_max = 40.0f;
-        game.wall_settings.change_min = 11.90f;
-        game.wall_settings.change_max = 12.00f;
-        normalize_settings(game);
-    } else if (state_index == 6) {
-        game.menu_tab = MenuTab::Clicking;
-        game.wall_settings.task_mode = TaskMode::Tracking;
-        game.wall_settings.target_health = 20;
-        normalize_settings(game);
-    } else if (state_index == 7) {
-        game.menu_tab = MenuTab::Clicking;
-        menu_focus_field(game, FieldId::PresetSearch);
-        game.edit_draft = "strafe";
-        game.edit_fresh = false;
+        if (state_index == 1) {
+            game.wall_preset_name.clear();
+            menu_focus_field(game, FieldId::WallName);
+        } else if (state_index == 2) {
+            game.wall_preset_name = "THIS NAME FILLS THE 32 CHAR MAXX";
+            menu_focus_field(game, FieldId::WallName);
+        } else if (state_index == 5) {
+            // Focused numeric box mid-edit (validates the active value-box look).
+            menu_focus_field(game, FieldId::WallRadiusMin);
+            game.edit_draft = "0.12";
+            game.edit_fresh = false;
+        } else if (state_index == 3) {
+            for (int i = 0; i < 12; ++i) {
+                char name[32];
+                std::snprintf(name, sizeof(name), "LONG PRESET NAME %02d", i + 1);
+                game.wall_presets.push_back({name, game.wall_settings});
+            }
+            ensure_presets(game);
+            game.wall_preset_scroll = std::max(0, static_cast<int>(game.wall_presets.size()) - VISIBLE_PRESET_ROWS);
+        } else if (state_index == 4) {
+            game.wall_preset_name = "MAX RANGE STRESS TEST";
+            game.wall_settings.target_count_min = 18;
+            game.wall_settings.target_count_max = 18;
+            game.wall_settings.wall_distance_min = 2.0f;
+            game.wall_settings.wall_distance_max = 30.0f;
+            game.wall_settings.radius_min = 0.44f;
+            game.wall_settings.radius_max = 0.45f;
+            game.wall_settings.horizontal_speed_min = 7.90f;
+            game.wall_settings.horizontal_speed_max = 8.00f;
+            game.wall_settings.vertical_speed_min = 7.90f;
+            game.wall_settings.vertical_speed_max = 8.00f;
+            game.wall_settings.acceleration_min = 39.5f;
+            game.wall_settings.acceleration_max = 40.0f;
+            game.wall_settings.change_min = 11.90f;
+            game.wall_settings.change_max = 12.00f;
+            normalize_settings(game);
+        } else if (state_index == 6) {
+            game.wall_settings.task_mode = TaskMode::Tracking;
+            game.wall_settings.target_health = 20;
+            normalize_settings(game);
+        } else if (state_index == 7) {
+            menu_focus_field(game, FieldId::PresetSearch);
+            game.edit_draft = "strafe";
+            game.edit_fresh = false;
+        }
+    } else {
+        game.menu_tab = MenuTab::Settings;
     }
     Input input;
     int drawable_w = 0, drawable_h = 0;
@@ -386,6 +466,21 @@ static bool render_debug_results(const std::string& path, int width, int height,
     game.runs.push_back(run);
     game.last_run = run;
     game.mode = AppMode::Results;
+    if (scenario_index == 2) {
+        game.playlist_active = true;
+        game.playlist_complete = false;
+        game.playlist_play_name = "WARMUP";
+        game.playlist_play_tasks = {run.preset_name, "1W2T STRAFE"};
+        game.playlist_play_index = 0;
+        game.playlist_session_runs.push_back(run);
+    } else if (scenario_index >= 3) {
+        game.playlist_active = true;
+        game.playlist_complete = true;
+        game.playlist_play_name = "WARMUP";
+        game.playlist_play_tasks = {previous.preset_name, run.preset_name};
+        game.playlist_session_runs.push_back(previous);
+        game.playlist_session_runs.push_back(run);
+    }
 
     int drawable_w = 0, drawable_h = 0;
     SDL_GL_GetDrawableSize(window, &drawable_w, &drawable_h);
@@ -432,6 +527,7 @@ static int run_debug_mode(int argc, char** argv) {
     if (std::string(argv[1]) == "--debug-results") {
         if (argc < 3) {
             std::fprintf(stderr, "Usage: %s --debug-results <out.bmp> [width height scenario]\n", argv[0]);
+            // scenario: 0=clicking  1=tracking  2=playlist mid  3=playlist complete
             return 2;
         }
         if (argc >= 5) {
@@ -521,6 +617,7 @@ int main(int argc, char** argv) {
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_BACKSPACE) input.backspace_pressed = true;
             if (event.type == SDL_KEYDOWN && (event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER) && event.key.repeat == 0) input.enter_pressed = true;
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_TAB && event.key.repeat == 0) input.tab_pressed = true;
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE && event.key.repeat == 0) input.space_pressed = true;
             if (event.type == SDL_TEXTINPUT) input.text_input += event.text.text;
             if (event.type == SDL_MOUSEWHEEL) input.wheel_y += event.wheel.y;
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
@@ -540,14 +637,16 @@ int main(int argc, char** argv) {
         input.mouse_x = mx;
         input.mouse_y = my;
         input.left_down = (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        input.space_down = keys[SDL_SCANCODE_SPACE] != 0;
         input.shift_down = (SDL_GetModState() & KMOD_SHIFT) != 0;
 
         if (input.quit) {
             running = false;
         }
         if (input.escape_pressed) {
-            if (game.mode == AppMode::Playing) game.mode = AppMode::Menu;  // abort run, no record
-            else if (game.mode == AppMode::Results) game.mode = AppMode::Menu;
+            if (game.mode == AppMode::Playing) abort_to_menu(game);  // abort run, no record
+            else if (game.mode == AppMode::Results) abort_to_menu(game);
             else if (game.active_field != FieldId::None) menu_cancel_edit(game);
             else running = false;
         }
@@ -577,9 +676,13 @@ int main(int argc, char** argv) {
         } else if (game.mode == AppMode::Results) {
             set_mouse_grab(game, false);
             if (input.left_pressed) {
-                game.mode = AppMode::Menu;
+                handle_results_continue(game);
             }
-            draw_results(game, drawable_w, drawable_h);
+            if (game.mode == AppMode::Playing) {
+                draw_world(game, drawable_w, drawable_h);
+            } else {
+                draw_results(game, drawable_w, drawable_h);
+            }
         } else {
             set_mouse_grab(game, false);
             draw_menu(game, input, drawable_w, drawable_h);

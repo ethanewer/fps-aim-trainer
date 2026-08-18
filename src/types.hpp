@@ -19,7 +19,10 @@ inline constexpr float WALL_TARGET_RADIUS_MIN_M = 0.01f;
 inline constexpr float WALL_TARGET_RADIUS_MAX_M = 0.45f;
 inline constexpr int WALL_TARGET_HEALTH_MAX = 999;
 inline constexpr int PRESET_NAME_MAX = 32;
-inline constexpr int VISIBLE_PRESET_ROWS = 8;
+inline constexpr int VISIBLE_PRESET_ROWS = 14;
+inline constexpr int VISIBLE_PLAYLIST_ROWS = 14;
+inline constexpr int VISIBLE_PLAYLIST_ADD_ROWS = 14;
+inline constexpr int VISIBLE_PLAYLIST_ENTRY_ROWS = 14;
 // Challenge mode: count hits within a fixed time budget. Tracking auto-fires at
 // a fixed rate so tracking quality becomes a discrete hit count.
 inline constexpr float CHALLENGE_DURATION_SEC = 60.0f;
@@ -29,7 +32,7 @@ enum class AppMode { Menu, Playing, Results };
 enum class ScenarioKind { WallClick, Tracking };
 enum class TaskMode { Clicking, Tracking };
 enum class MapKind { WallRoom };
-enum class MenuTab { Clicking, General };
+enum class MenuTab { Clicking, Playlists, Settings };
 enum class RunMode { Practice, Challenge };
 
 // Every editable text box in the menu has a stable id. `None` means nothing is
@@ -53,7 +56,11 @@ enum class FieldId {
     WallAccelMax,
     WallDirMin,
     WallDirMax,
-    // General tab
+    // Playlists tab
+    PlaylistSearch,
+    PlaylistName,
+    PlaylistAddSearch,
+    // Settings tab
     GenSens,
     GenLength,
     GenGap,
@@ -116,6 +123,11 @@ struct WallPreset {
     WallClickSettings settings;
 };
 
+struct Playlist {
+    std::string name;
+    std::vector<std::string> task_names;  // references WallPreset::name; duplicates allowed
+};
+
 struct ScenarioDef {
     const char* title;
     ScenarioKind kind;
@@ -162,6 +174,8 @@ struct Input {
     int rel_y = 0;
     bool left_pressed = false;
     bool left_down = false;
+    bool space_pressed = false;
+    bool space_down = false;
     bool escape_pressed = false;
     bool backspace_pressed = false;
     bool enter_pressed = false;
@@ -171,6 +185,14 @@ struct Input {
     int wheel_y = 0;
     std::string text_input;
 };
+
+inline bool fire_pressed(const Input& input) {
+    return input.left_pressed || input.space_pressed;
+}
+
+inline bool fire_down(const Input& input) {
+    return input.left_down || input.space_down;
+}
 
 struct Game {
     AppMode mode = AppMode::Menu;
@@ -190,6 +212,23 @@ struct Game {
     int wall_preset_scroll = 0;
     std::string wall_preset_name = "1W2T DYNAMIC";
     std::string preset_search;
+    std::vector<Playlist> playlists;
+    int selected_playlist = 0;
+    int playlist_scroll = 0;
+    std::string playlist_name;
+    std::string playlist_search;
+    int selected_playlist_entry = 0;
+    int playlist_entry_scroll = 0;
+    std::string playlist_add_search;
+    int playlist_add_scroll = 0;
+    bool playlist_active = false;
+    bool playlist_paused = false;
+    bool playlist_complete = false;
+    int playlist_play_index = 0;
+    int playlist_play_id = -1;
+    std::string playlist_play_name;
+    std::vector<std::string> playlist_play_tasks;
+    std::vector<RunRecord> playlist_session_runs;
     MenuTab menu_tab = MenuTab::Clicking;
     // Text-box editing state. `active_field` is the focused box (None = idle);
     // `edit_draft` is the raw text being typed; `edit_fresh` is true right after

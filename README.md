@@ -7,14 +7,14 @@ Lightweight native FPS aim trainer prototype.
 In a scenario:
 
 - Move the mouse to aim. The scenario captures relative mouse input.
-- Left click shoots in clicking scenarios.
-- Hold left click to score in tracking scenarios.
+- Left click or Space shoots in clicking scenarios.
+- Hold left click or Space to score in tracking scenarios.
 - Hits play a short, crisp confirmation sound.
 - Esc returns to the menu.
 
 In the menu:
 
-- Pick a tab (`TASKS`, `GENERAL`) and a preset from the list.
+- Pick a tab (`TASKS`, `PLAYLISTS`, `SETTINGS`) and a preset or playlist from the list.
 - Every setting is a text box. Click a box (or press `TAB`) to focus it, then type the value.
   The first keystroke replaces the shown number; backspace edits it.
 - `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
@@ -24,8 +24,14 @@ In the menu:
 - **Practice** starts an endless run; **Challenge** starts a timed 60-second run.
   Clicking an already-selected preset in the list also starts a challenge.
 - **New** copies the current selected/editor values in that tab.
-- **Save preset** / **Save general** persist settings. General settings include
+- **Save preset** / **Save playlist** / **Save settings** persist settings. Settings include
   sensitivity, crosshair, target color, and wall color.
+- Playlists are ordered lists of existing tasks. Add tasks from the catalog, reorder with
+  **Up** / **Down**, and **Play** runs each one as a 60-second challenge from the start,
+  with results between tasks and a summary at the end. Clicking an already-selected playlist
+  also starts it. Clicking an already-selected task in the playlist starts from that task.
+  Esc during a playlist returns to the menu without losing progress; **Resume** continues
+  from the unfinished task and keeps scores from tasks already finished in that session.
 - Esc on the menu (with nothing being edited) quits.
 
 ## Challenge Mode

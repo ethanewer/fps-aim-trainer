@@ -208,6 +208,24 @@ static void ensure_wall_presets(Game& game) {
     }
 }
 
+static bool wall_preset_exists(const std::vector<WallPreset>& presets, const std::string& name) {
+    return wall_preset_index(presets, name) >= 0;
+}
+
+static void normalize_playlists(Game& game) {
+    for (Playlist& playlist : game.playlists) {
+        playlist.name = sanitize_preset_name(playlist.name);
+        std::vector<std::string> kept;
+        kept.reserve(playlist.task_names.size());
+        for (const std::string& task_name : playlist.task_names) {
+            if (wall_preset_exists(game.wall_presets, task_name)) {
+                kept.push_back(task_name);
+            }
+        }
+        playlist.task_names = kept;
+    }
+}
+
 void normalize_settings(Game& game) {
     normalize_wall_settings(game, game.wall_settings);
     normalize_crosshair(game.crosshair);
@@ -221,6 +239,29 @@ void normalize_settings(Game& game) {
         }
         normalize_wall_settings(game, preset.settings);
     }
+    normalize_playlists(game);
+}
+
+static void clamp_playlist_indices(Game& game) {
+    int playlist_count = static_cast<int>(game.playlists.size());
+    if (playlist_count <= 0) {
+        game.selected_playlist = 0;
+        game.playlist_scroll = 0;
+        game.selected_playlist_entry = 0;
+        game.playlist_entry_scroll = 0;
+        return;
+    }
+    game.selected_playlist = std::max(0, std::min(game.selected_playlist, playlist_count - 1));
+    game.playlist_scroll = std::max(0, std::min(game.playlist_scroll, std::max(0, playlist_count - VISIBLE_PLAYLIST_ROWS)));
+    int entry_count = static_cast<int>(game.playlists[game.selected_playlist].task_names.size());
+    if (entry_count <= 0) {
+        game.selected_playlist_entry = 0;
+        game.playlist_entry_scroll = 0;
+    } else {
+        game.selected_playlist_entry = std::max(0, std::min(game.selected_playlist_entry, entry_count - 1));
+        game.playlist_entry_scroll = std::max(0, std::min(game.playlist_entry_scroll, std::max(0, entry_count - VISIBLE_PLAYLIST_ENTRY_ROWS)));
+    }
+    game.playlist_add_scroll = std::max(0, game.playlist_add_scroll);
 }
 
 void ensure_presets(Game& game) {
@@ -228,6 +269,7 @@ void ensure_presets(Game& game) {
     normalize_settings(game);
     game.selected_wall_preset = std::max(0, std::min(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()) - 1));
     game.wall_preset_scroll = std::max(0, std::min(game.wall_preset_scroll, std::max(0, static_cast<int>(game.wall_presets.size()) - VISIBLE_PRESET_ROWS)));
+    clamp_playlist_indices(game);
 }
 
 void apply_selected_presets(Game& game) {
@@ -529,8 +571,80 @@ void reset_wall_presets(Game& game) {
     game.wall_preset_name = game.wall_presets.front().name;
 }
 
+void rename_task_in_playlists(Game& game, const std::string& old_name, const std::string& new_name) {
+    if (old_name.empty() || old_name == new_name) {
+        return;
+    }
+    for (Playlist& playlist : game.playlists) {
+        for (std::string& task_name : playlist.task_names) {
+            if (task_name == old_name) {
+                task_name = new_name;
+            }
+        }
+    }
+}
+
+void remove_task_from_playlists(Game& game, const std::string& name) {
+    if (name.empty()) {
+        return;
+    }
+    for (Playlist& playlist : game.playlists) {
+        playlist.task_names.erase(
+            std::remove(playlist.task_names.begin(), playlist.task_names.end(), name),
+            playlist.task_names.end());
+    }
+    clamp_playlist_indices(game);
+}
+
+bool playlist_has_playable_tasks(const Game& game) {
+    if (game.selected_playlist < 0 || game.selected_playlist >= static_cast<int>(game.playlists.size())) {
+        return false;
+    }
+    for (const std::string& task_name : game.playlists[game.selected_playlist].task_names) {
+        if (wall_preset_exists(game.wall_presets, task_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void apply_selected_playlist(Game& game) {
+    ensure_presets(game);
+    if (game.playlists.empty()) {
+        game.playlist_name.clear();
+        game.selected_playlist_entry = 0;
+        game.playlist_entry_scroll = 0;
+        return;
+    }
+    game.playlist_name = game.playlists[game.selected_playlist].name;
+    int entry_count = static_cast<int>(game.playlists[game.selected_playlist].task_names.size());
+    game.selected_playlist_entry = entry_count > 0 ? std::min(game.selected_playlist_entry, entry_count - 1) : 0;
+}
+
+void save_current_playlist(Game& game) {
+    normalize_settings(game);
+    std::string old_name;
+    if (game.selected_playlist >= 0 && game.selected_playlist < static_cast<int>(game.playlists.size())) {
+        old_name = game.playlists[game.selected_playlist].name;
+    }
+    game.playlist_name = unique_preset_name(game.playlists, game.playlist_name, game.selected_playlist);
+    if (game.selected_playlist < 0 || game.selected_playlist >= static_cast<int>(game.playlists.size())) {
+        game.playlists.push_back({game.playlist_name, {}});
+        game.selected_playlist = static_cast<int>(game.playlists.size()) - 1;
+    } else {
+        game.playlists[game.selected_playlist].name = game.playlist_name;
+    }
+    if (game.playlist_paused && game.playlist_play_name == old_name) {
+        game.playlist_play_name = game.playlist_name;
+    }
+}
+
 void save_current_wall_preset(Game& game) {
     normalize_settings(game);
+    std::string old_name;
+    if (game.selected_wall_preset >= 0 && game.selected_wall_preset < static_cast<int>(game.wall_presets.size())) {
+        old_name = game.wall_presets[game.selected_wall_preset].name;
+    }
     game.wall_preset_name = unique_preset_name(game.wall_presets, game.wall_preset_name, game.selected_wall_preset);
     if (game.selected_wall_preset < 0 || game.selected_wall_preset >= static_cast<int>(game.wall_presets.size())) {
         game.wall_presets.push_back({game.wall_preset_name, game.wall_settings});
@@ -538,6 +652,7 @@ void save_current_wall_preset(Game& game) {
     } else {
         game.wall_presets[game.selected_wall_preset] = {game.wall_preset_name, game.wall_settings};
     }
+    rename_task_in_playlists(game, old_name, game.wall_preset_name);
 }
 
 std::string settings_path() {
@@ -569,12 +684,13 @@ void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 10\n";
+    out << "version 11\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
     out << "target_color " << normalized.target_color.r << " " << normalized.target_color.g << " " << normalized.target_color.b << "\n";
     out << "wall_color " << normalized.wall_color.r << " " << normalized.wall_color.g << " " << normalized.wall_color.b << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
+    out << "selected_playlist " << normalized.selected_playlist << "\n";
     for (const WallPreset& preset : normalized.wall_presets) {
         out << "wall_preset " << std::quoted(preset.name) << " "
             << preset.settings.target_count_min << " "
@@ -593,6 +709,13 @@ void save_settings(const Game& game) {
             << preset.settings.change_max << " "
             << (preset.settings.task_mode == TaskMode::Tracking ? 1 : 0) << " "
             << preset.settings.target_health << "\n";
+    }
+    for (const Playlist& playlist : normalized.playlists) {
+        out << "playlist " << std::quoted(playlist.name);
+        for (const std::string& task_name : playlist.task_names) {
+            out << " " << std::quoted(task_name);
+        }
+        out << "\n";
     }
 }
 
@@ -626,6 +749,21 @@ void load_settings(Game& game) {
             row >> game.wall_color.r >> game.wall_color.g >> game.wall_color.b;
         } else if (key == "selected_wall") {
             row >> game.selected_wall_preset;
+        } else if (key == "selected_playlist") {
+            row >> game.selected_playlist;
+        } else if (key == "playlist") {
+            Playlist playlist;
+            if (row >> std::quoted(playlist.name)) {
+                std::string task_name;
+                while (row >> std::quoted(task_name)) {
+                    if (!task_name.empty()) {
+                        playlist.task_names.push_back(task_name);
+                    }
+                }
+                if (!playlist.name.empty()) {
+                    game.playlists.push_back(playlist);
+                }
+            }
         } else if (key == "selected_pill") {
             continue;  // pill tracking was removed; ignore leftover keys
         } else if (key == "wall_preset") {
@@ -784,6 +922,7 @@ void load_settings(Game& game) {
         }
     }
     apply_selected_presets(game);
+    apply_selected_playlist(game);
 }
 
 std::string runs_path() {

@@ -54,6 +54,11 @@ void ensure_presets(Game& game);
 void apply_selected_presets(Game& game);
 void save_current_wall_preset(Game& game);
 void reset_wall_presets(Game& game);
+void apply_selected_playlist(Game& game);
+void save_current_playlist(Game& game);
+void rename_task_in_playlists(Game& game, const std::string& old_name, const std::string& new_name);
+void remove_task_from_playlists(Game& game, const std::string& name);
+bool playlist_has_playable_tasks(const Game& game);
 
 // RESET TASKS re-runs scripts/default-tasks.py when found next to the repo.
 // The dumped list becomes the live builtin table so ensure_presets will not

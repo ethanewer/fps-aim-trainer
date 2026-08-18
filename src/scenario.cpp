@@ -149,6 +149,175 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     }
 }
 
+void clear_playlist_session(Game& game) {
+    game.playlist_active = false;
+    game.playlist_paused = false;
+    game.playlist_complete = false;
+    game.playlist_play_index = 0;
+    game.playlist_play_id = -1;
+    game.playlist_play_name.clear();
+    game.playlist_play_tasks.clear();
+    game.playlist_session_runs.clear();
+}
+
+static bool playlist_task_exists(const Game& game, const std::string& name) {
+    for (const WallPreset& preset : game.wall_presets) {
+        if (preset.name == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::vector<std::string> playable_playlist_tasks(const Game& game, const Playlist& playlist) {
+    std::vector<std::string> tasks;
+    tasks.reserve(playlist.task_names.size());
+    for (const std::string& task_name : playlist.task_names) {
+        if (playlist_task_exists(game, task_name)) {
+            tasks.push_back(task_name);
+        }
+    }
+    return tasks;
+}
+
+static int playlist_playable_index(const Game& game, const Playlist& playlist, int start_entry) {
+    int index = 0;
+    int count = static_cast<int>(playlist.task_names.size());
+    int until = std::max(0, std::min(start_entry, count));
+    for (int i = 0; i < until; ++i) {
+        if (playlist_task_exists(game, playlist.task_names[i])) {
+            index += 1;
+        }
+    }
+    return index;
+}
+
+static bool apply_playlist_task(Game& game, int task_index) {
+    if (task_index < 0 || task_index >= static_cast<int>(game.playlist_play_tasks.size())) {
+        return false;
+    }
+    const std::string& name = game.playlist_play_tasks[task_index];
+    for (int i = 0; i < static_cast<int>(game.wall_presets.size()); ++i) {
+        if (game.wall_presets[i].name == name) {
+            game.selected_wall_preset = i;
+            game.wall_settings = game.wall_presets[i].settings;
+            game.wall_preset_name = game.wall_presets[i].name;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool start_current_playlist_task(Game& game) {
+    while (game.playlist_play_index < static_cast<int>(game.playlist_play_tasks.size()) &&
+           !apply_playlist_task(game, game.playlist_play_index)) {
+        game.playlist_play_index += 1;
+    }
+    if (game.playlist_play_index >= static_cast<int>(game.playlist_play_tasks.size())) {
+        return false;
+    }
+    if (game.scenarios.empty()) {
+        init_scenarios(game);
+    }
+    game.playlist_active = true;
+    game.playlist_paused = false;
+    game.playlist_complete = false;
+    start_scenario(game, game.scenarios[0], RunMode::Challenge);
+    return true;
+}
+
+bool playlist_can_resume(const Game& game) {
+    if (!game.playlist_paused || game.playlist_play_tasks.empty()) {
+        return false;
+    }
+    if (game.playlist_play_index < 0 ||
+        game.playlist_play_index >= static_cast<int>(game.playlist_play_tasks.size())) {
+        return false;
+    }
+    if (game.selected_playlist < 0 || game.selected_playlist >= static_cast<int>(game.playlists.size())) {
+        return false;
+    }
+    return game.playlists[game.selected_playlist].name == game.playlist_play_name;
+}
+
+bool start_playlist(Game& game, int start_entry) {
+    ensure_presets(game);
+    if (!playlist_has_playable_tasks(game)) {
+        return false;
+    }
+    const Playlist& playlist = game.playlists[game.selected_playlist];
+    std::vector<std::string> tasks = playable_playlist_tasks(game, playlist);
+    int start_index = playlist_playable_index(game, playlist, start_entry);
+    if (tasks.empty() || start_index >= static_cast<int>(tasks.size())) {
+        return false;
+    }
+    game.playlist_play_id = game.selected_playlist;
+    game.playlist_play_name = playlist.name;
+    game.playlist_play_tasks = tasks;
+    game.playlist_play_index = start_index;
+    game.playlist_session_runs.clear();
+    if (!start_current_playlist_task(game)) {
+        clear_playlist_session(game);
+        return false;
+    }
+    return true;
+}
+
+bool resume_playlist(Game& game) {
+    if (!playlist_can_resume(game)) {
+        return false;
+    }
+    ensure_presets(game);
+    if (!start_current_playlist_task(game)) {
+        clear_playlist_session(game);
+        return false;
+    }
+    return true;
+}
+
+void continue_playlist(Game& game) {
+    if (!game.playlist_active || game.playlist_complete) {
+        return;
+    }
+    game.playlist_play_index += 1;
+    if (game.playlist_play_index >= static_cast<int>(game.playlist_play_tasks.size())) {
+        game.playlist_complete = true;
+        game.mode = AppMode::Results;
+        return;
+    }
+    if (!start_current_playlist_task(game)) {
+        clear_playlist_session(game);
+        game.mode = AppMode::Menu;
+    }
+}
+
+void handle_results_continue(Game& game) {
+    if (game.playlist_active && !game.playlist_complete) {
+        continue_playlist(game);
+        return;
+    }
+    clear_playlist_session(game);
+    game.mode = AppMode::Menu;
+}
+
+void abort_to_menu(Game& game) {
+    if (game.playlist_active && !game.playlist_complete) {
+        if (game.mode == AppMode::Results) {
+            game.playlist_play_index += 1;
+            if (game.playlist_play_index >= static_cast<int>(game.playlist_play_tasks.size())) {
+                clear_playlist_session(game);
+                game.mode = AppMode::Menu;
+                return;
+            }
+        }
+        game.playlist_active = false;
+        game.playlist_paused = true;
+    } else {
+        clear_playlist_session(game);
+    }
+    game.mode = AppMode::Menu;
+}
+
 static int aimed_target(const Game& game) {
     Vec3 origin = camera_pos(game);
     Vec3 dir = forward_dir(game);
@@ -343,6 +512,12 @@ static void finalize_challenge(Game& game) {
     game.runs.push_back(run);
     game.last_run = run;
     save_runs(game);
+    if (game.playlist_active) {
+        game.playlist_session_runs.push_back(run);
+        if (game.playlist_play_index + 1 >= static_cast<int>(game.playlist_play_tasks.size())) {
+            game.playlist_complete = true;
+        }
+    }
     game.mode = AppMode::Results;
 }
 
@@ -374,7 +549,7 @@ void update_playing(Game& game, const Input& input, float dt) {
     int hit_index = aimed_target(game);
     if (!is_tracking(game.scenario.kind)) {
         // Clicking always scores on manual shots (score = hits).
-        if (input.left_pressed) {
+        if (fire_pressed(input)) {
             game.stats.shots += 1;
             if (hit_index >= 0) {
                 game.stats.hits += 1;
@@ -385,7 +560,7 @@ void update_playing(Game& game, const Input& input, float dt) {
     } else if (game.run_mode == RunMode::Challenge) {
         // Tracking challenge: auto-fire at a fixed rate; each on-target tick is a hit.
         fire_tracking_shots(game, hit_index, dt);
-    } else if (input.left_down) {
+    } else if (fire_down(input)) {
         // Tracking practice: score by time-on-target while firing. Health ticks at the
         // same fire rate, but practice does not auto-count shots.
         game.stats.tracking_fire_time += dt;

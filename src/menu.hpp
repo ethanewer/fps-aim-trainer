@@ -19,6 +19,10 @@ void menu_cancel_edit(Game& game);   // discard the active field and unfocus
 // Preset actions.
 void new_wall_preset(Game& game);
 void delete_wall_preset(Game& game);
+void new_playlist(Game& game);
+void delete_playlist(Game& game);
 
 // Indices into `game.wall_presets` whose names contain the current search query.
 std::vector<int> matching_wall_presets(const Game& game);
+// Indices into `game.playlists` whose names contain the current search query.
+std::vector<int> matching_playlists(const Game& game);

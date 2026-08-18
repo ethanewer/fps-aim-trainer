@@ -224,6 +224,14 @@ void draw_world(const Game& game, int w, int h) {
     std::string sens_line = line;
     std::string stat_line;
     std::string timer_line;
+    std::string playlist_line;
+    if (game.playlist_active && !game.playlist_play_tasks.empty()) {
+        std::snprintf(line, sizeof(line), "Playlist %d/%d  %s",
+                      game.playlist_play_index + 1,
+                      static_cast<int>(game.playlist_play_tasks.size()),
+                      game.wall_preset_name.c_str());
+        playlist_line = line;
+    }
     if (game.run_mode == RunMode::Challenge) {
         // Score is hits; accuracy is shown but is not the score.
         float accuracy = game.stats.shots == 0 ? 0.0f : static_cast<float>(game.stats.hits) / static_cast<float>(game.stats.shots) * 100.0f;
@@ -238,24 +246,41 @@ void draw_world(const Game& game, int w, int h) {
         stat_line = line;
     } else {
         float tracking = game.stats.tracking_fire_time <= 0.0001f ? 0.0f : game.stats.tracking_on_time / game.stats.tracking_fire_time * 100.0f;
-        std::snprintf(line, sizeof(line), "Tracking %.1f%%  Hold LMB", tracking);
+        std::snprintf(line, sizeof(line), "Tracking %.1f%%  Hold LMB/Space", tracking);
         stat_line = line;
     }
     bool challenge = !timer_line.empty();
+    bool playlist = !playlist_line.empty();
     float hud_w = std::max({
         260.0f,
         text_width(game.scenario.title, 3.0f) + 36.0f,
         text_width(sens_line, 2.4f) + 36.0f,
         text_width(stat_line, 2.4f) + 36.0f,
         text_width(timer_line, 2.4f) + 36.0f,
+        text_width(playlist_line, 2.4f) + 36.0f,
     });
     hud_w = std::min(hud_w, ui_w - 48.0f);
-    rect(24, 22, hud_w, challenge ? 152.0f : 122.0f, 0, 0, 0, 150);
-    text_fit(42, 42, game.scenario.title, 3.0f, hud_w - 36.0f);
-    text_fit(42, 78, sens_line, 2.4f, hud_w - 36.0f, 210, 220, 232);
-    text_fit(42, 108, stat_line, 2.4f, hud_w - 36.0f, 210, 220, 232);
+    float hud_h = 122.0f;
     if (challenge) {
-        text_fit(42, 138, timer_line, 2.4f, hud_w - 36.0f, 255, 200, 90);
+        hud_h += 30.0f;
+    }
+    if (playlist) {
+        hud_h += 30.0f;
+    }
+    rect(24, 22, hud_w, hud_h, 0, 0, 0, 150);
+    float text_y = 42.0f;
+    text_fit(42, text_y, game.scenario.title, 3.0f, hud_w - 36.0f);
+    text_y += 36.0f;
+    text_fit(42, text_y, sens_line, 2.4f, hud_w - 36.0f, 210, 220, 232);
+    text_y += 30.0f;
+    text_fit(42, text_y, stat_line, 2.4f, hud_w - 36.0f, 210, 220, 232);
+    text_y += 30.0f;
+    if (challenge) {
+        text_fit(42, text_y, timer_line, 2.4f, hud_w - 36.0f, 255, 200, 90);
+        text_y += 30.0f;
+    }
+    if (playlist) {
+        text_fit(42, text_y, playlist_line, 2.4f, hud_w - 36.0f, 255, 200, 90);
     }
     text_fit(42, ui_h - 42, challenge ? "Esc abort" : "Esc menu / Quit", 2.2f, ui_w - 84.0f, 210, 220, 232);
 }

@@ -19,11 +19,15 @@ Guidance for AI agents (and humans) working in this repository. Read this before
 - **Run modes** (`RunMode`): `Practice` (endless) and `Challenge` (a `CHALLENGE_DURATION_SEC` timed
   run whose score is hits; tracking auto-fires at `TRACKING_FIRE_HZ`). Accuracy is recorded but is
   not the score. Wall tasks can set target health (`1` = one shot, `N` = N hits, `0` = infinite).
-  `start_scenario` takes the mode; `update_playing` runs the timer/auto-fire and calls
+- `start_scenario` takes the mode; `update_playing` runs the timer/auto-fire and calls
   `finalize_challenge` on expiry, which appends a `RunRecord` and switches to `AppMode::Results`.
+  A playlist is an ordered list of task names; `start_playlist` runs each as a Challenge,
+  shows results between tasks, and a summary after the last. Esc pauses the session;
+  `resume_playlist` continues from the unfinished task. Play starts from the first task;
+  clicking an already-selected playlist entry starts from that task.
 - **Settings & presets** persist to `~/.aim_trainer.cfg` (macOS/Linux) or
   `%APPDATA%\aim_trainer.cfg` (Windows). `load_settings` migrates older file formats;
-  the self-test guards those migrations.
+  the self-test guards those migrations. Playlists are stored in the same file.
 - **Challenge run history** persists separately to `~/.aim_trainer_runs.cfg` via
   `save_runs`/`load_runs`; `best_run_score` powers the `Best` readout in the menu and results.
 
@@ -142,16 +146,19 @@ every menu or rendering change.
 
 ```sh
 # Menu: --debug-menu <out.bmp> [width height tab state]
-#   tab:   0=TASKS  1=GENERAL
+#   tab:   0=TASKS  1=PLAYLISTS  2=SETTINGS
 #   state: 0=default  1=empty-name editing  2=long-name editing
 #          3=long preset list (scrolled)  4=max-range stress  5=focused numeric box
 #          6=tracking mode selected  7=task search (strafe)
+#          Playlists tab: 0=sample playlist  1=empty  2=long name  3=long list
+#                         7=add-task search  8=long entry list  9=resume available
 ./build/aim-trainer --debug-menu /tmp/menu.bmp 1920 1080 0 0
 
 # Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=clicking, 1=tracking)
 ./build/aim-trainer --debug-shot 0 /tmp/wall.bmp 1920 1080 8
 
-# Challenge results screen: --debug-results <out.bmp> [width height scenario]  (0=clicking, 1=tracking)
+# Challenge results screen: --debug-results <out.bmp> [width height scenario]
+#   scenario: 0=clicking  1=tracking  2=playlist mid  3=playlist complete
 ./build/aim-trainer --debug-results /tmp/results.bmp 1920 1080 0
 
 # All scenarios into a directory:
@@ -178,11 +185,12 @@ alignment, overflow, and focus highlighting.
   mixed case, commas, and `=`. Units can be written as `[m]`, `[m/s]`, `[m/s2]`, `[s]`,
   `[px]`. Rasterization lives in `src/font.cpp`; `text_height(scale)` is the em box used
   for vertical centering. If no system font is found, the self-test fails.
-- **Menu coordinates:** the menu is authored on a virtual ~1040×720 canvas, uniformly scaled by
+- **Menu coordinates:** the menu is authored on a virtual ~1040×840 canvas, uniformly scaled by
   `menu_scale` and vertically centered by `voff`. Mouse input is inverse-transformed by the same
   factors in `draw_menu` — if you change the draw transform, change the mouse transform to match.
   The Tasks sidebar search box is `FieldId::PresetSearch`; it filters presets by case-insensitive
-  substring and is first in the Tasks tab order.
+  substring and is first in the Tasks tab order. Playlists tab order is `PlaylistSearch`,
+  `PlaylistName`, `PlaylistAddSearch`.
 - **Editing model:** each editable box is a `FieldId`; the focused field's text lives in
   `game.edit_draft` and is committed to the real value on blur/Enter/Tab/focus-change. Numeric
   fields fresh-replace on the first keystroke; names sanitize on commit. `field_desc()` in
@@ -195,7 +203,8 @@ alignment, overflow, and focus highlighting.
   The room/far-plane depth is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files. (Current: `version 10`; v9 built-in presets
+  format. Don't silently break existing `.cfg` files. (Current: `version 11`; v10 files load with
+  empty playlists; v9 built-in presets
   migrate to an 8-10m wall range; v8 clicking presets with unused health 0 migrate to one-shot
   health 1; v7 wall presets migrate to clicking with health 1; v4 single wall distance migrates
   to a min==max range. Leftover `pill_preset` lines are ignored.)

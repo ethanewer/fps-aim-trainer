@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <ctime>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "config.hpp"
@@ -86,6 +87,9 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::WallAccelMax: return f_float(&g.wall_settings.acceleration_max, 0.0f, 40.0f, 2);
         case FieldId::WallDirMin: return f_float(&g.wall_settings.change_min, 0.0f, 12.0f, 2);
         case FieldId::WallDirMax: return f_float(&g.wall_settings.change_max, 0.0f, 12.0f, 2);
+        case FieldId::PlaylistSearch: return f_search(&g.playlist_search);
+        case FieldId::PlaylistName: return f_name(&g.playlist_name);
+        case FieldId::PlaylistAddSearch: return f_search(&g.playlist_add_search);
         case FieldId::GenSens: return f_float(&g.sensitivity, 0.001f, 10.0f, 3);
         case FieldId::GenLength: return f_float(&g.crosshair.length, 4.0f, 24.0f, 0);
         case FieldId::GenGap: return f_float(&g.crosshair.gap, 0.0f, 16.0f, 0);
@@ -189,6 +193,9 @@ static const FieldId WALL_ORDER[] = {
     FieldId::WallAccelMin, FieldId::WallAccelMax,
     FieldId::WallDirMin, FieldId::WallDirMax,
 };
+static const FieldId PLAYLIST_ORDER[] = {
+    FieldId::PlaylistSearch, FieldId::PlaylistName, FieldId::PlaylistAddSearch,
+};
 static const FieldId GEN_ORDER[] = {
     FieldId::GenSens, FieldId::GenLength, FieldId::GenGap, FieldId::GenThick,
     FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB,
@@ -200,6 +207,10 @@ static void tab_field_order(const Game& g, const FieldId** order, int* count) {
         case MenuTab::Clicking:
             *order = WALL_ORDER;
             *count = static_cast<int>(sizeof(WALL_ORDER) / sizeof(WALL_ORDER[0]));
+            break;
+        case MenuTab::Playlists:
+            *order = PLAYLIST_ORDER;
+            *count = static_cast<int>(sizeof(PLAYLIST_ORDER) / sizeof(PLAYLIST_ORDER[0]));
             break;
         default:
             *order = GEN_ORDER;
@@ -318,14 +329,44 @@ std::vector<int> matching_wall_presets(const Game& game) {
     return matches;
 }
 
+std::vector<int> matching_playlists(const Game& game) {
+    std::string query = game.playlist_search;
+    if (game.active_field == FieldId::PlaylistSearch) {
+        query = game.edit_draft;
+    }
+    std::vector<int> matches;
+    matches.reserve(game.playlists.size());
+    for (int i = 0; i < static_cast<int>(game.playlists.size()); ++i) {
+        if (preset_name_matches(game.playlists[i].name, query)) {
+            matches.push_back(i);
+        }
+    }
+    return matches;
+}
+
+static std::vector<int> matching_playlist_add_tasks(const Game& game) {
+    std::string query = game.playlist_add_search;
+    if (game.active_field == FieldId::PlaylistAddSearch) {
+        query = game.edit_draft;
+    }
+    std::vector<int> matches;
+    matches.reserve(game.wall_presets.size());
+    for (int i = 0; i < static_cast<int>(game.wall_presets.size()); ++i) {
+        if (preset_name_matches(game.wall_presets[i].name, query)) {
+            matches.push_back(i);
+        }
+    }
+    return matches;
+}
+
 // Adjusts `scroll` so the selected row is within the visible window.
-static void reveal_selected_preset(int selected, int count, int& scroll) {
+static void reveal_selected_row(int selected, int count, int& scroll, int visible_rows) {
     if (selected < scroll) {
         scroll = selected;
-    } else if (selected > scroll + VISIBLE_PRESET_ROWS - 1) {
-        scroll = selected - (VISIBLE_PRESET_ROWS - 1);
+    } else if (selected > scroll + visible_rows - 1) {
+        scroll = selected - (visible_rows - 1);
     }
-    scroll = std::max(0, std::min(scroll, std::max(0, count - VISIBLE_PRESET_ROWS)));
+    scroll = std::max(0, std::min(scroll, std::max(0, count - visible_rows)));
 }
 
 void new_wall_preset(Game& game) {
@@ -338,11 +379,15 @@ void new_wall_preset(Game& game) {
     game.selected_wall_preset = static_cast<int>(game.wall_presets.size()) - 1;
     game.wall_settings = game.wall_presets.back().settings;
     game.wall_preset_name = game.wall_presets.back().name;
-    reveal_selected_preset(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll);
+    reveal_selected_row(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll, VISIBLE_PRESET_ROWS);
 }
 
 void delete_wall_preset(Game& game) {
     game.active_field = FieldId::None;
+    std::string removed;
+    if (game.selected_wall_preset >= 0 && game.selected_wall_preset < static_cast<int>(game.wall_presets.size())) {
+        removed = game.wall_presets[game.selected_wall_preset].name;
+    }
     if (game.wall_presets.size() <= 1) {
         game.wall_presets.clear();
         game.selected_wall_preset = 0;
@@ -350,8 +395,50 @@ void delete_wall_preset(Game& game) {
         game.wall_presets.erase(game.wall_presets.begin() + game.selected_wall_preset);
         game.selected_wall_preset = std::max(0, std::min(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()) - 1));
     }
+    remove_task_from_playlists(game, removed);
     apply_selected_presets(game);
-    reveal_selected_preset(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll);
+    reveal_selected_row(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll, VISIBLE_PRESET_ROWS);
+}
+
+void new_playlist(Game& game) {
+    char name[32];
+    std::snprintf(name, sizeof(name), "PLAYLIST %d", static_cast<int>(game.playlists.size()) + 1);
+    game.active_field = FieldId::None;
+    game.playlist_search.clear();
+    std::vector<std::string> copied;
+    if (game.selected_playlist >= 0 && game.selected_playlist < static_cast<int>(game.playlists.size())) {
+        copied = game.playlists[game.selected_playlist].task_names;
+    }
+    std::string unique_name = unique_preset_name(game.playlists, name, -1);
+    game.playlists.push_back({unique_name, copied});
+    game.selected_playlist = static_cast<int>(game.playlists.size()) - 1;
+    game.playlist_name = game.playlists.back().name;
+    game.selected_playlist_entry = 0;
+    game.playlist_entry_scroll = 0;
+    reveal_selected_row(game.selected_playlist, static_cast<int>(game.playlists.size()), game.playlist_scroll, VISIBLE_PLAYLIST_ROWS);
+}
+
+void delete_playlist(Game& game) {
+    game.active_field = FieldId::None;
+    if (game.playlists.empty()) {
+        return;
+    }
+    std::string removed = game.playlists[game.selected_playlist].name;
+    game.playlists.erase(game.playlists.begin() + game.selected_playlist);
+    if (game.playlist_paused && game.playlist_play_name == removed) {
+        clear_playlist_session(game);
+    }
+    if (game.playlists.empty()) {
+        game.selected_playlist = 0;
+        game.playlist_name.clear();
+        game.selected_playlist_entry = 0;
+        game.playlist_entry_scroll = 0;
+        game.playlist_scroll = 0;
+        return;
+    }
+    game.selected_playlist = std::max(0, std::min(game.selected_playlist, static_cast<int>(game.playlists.size()) - 1));
+    apply_selected_playlist(game);
+    reveal_selected_row(game.selected_playlist, static_cast<int>(game.playlists.size()), game.playlist_scroll, VISIBLE_PLAYLIST_ROWS);
 }
 
 // ---------------------------------------------------------------------------
@@ -399,15 +486,17 @@ static bool secondary_button(const Input& in, float x, float y, float w, float h
     return hovered && in.left_pressed;
 }
 
-static bool primary_button(const Input& in, float x, float y, float w, float h, const std::string& label, float scale) {
-    bool hovered = hit(in, x, y, w, h);
+static bool primary_button(const Input& in, float x, float y, float w, float h, const std::string& label, float scale, bool enabled = true) {
+    bool hovered = enabled && hit(in, x, y, w, h);
     rect(x + 3.0f, y + 3.0f, w, h, 0, 0, 0, 90);  // shadow
-    if (hovered) rect(x, y, w, h, 255, 95, 108);
+    if (!enabled) rect(x, y, w, h, 88, 70, 76);
+    else if (hovered) rect(x, y, w, h, 255, 95, 108);
     else rect(x, y, w, h, 255, 70, 85);
-    rect(x, y, w, 2.0f, 255, 120, 132);            // top highlight
+    rect(x, y, w, 2.0f, enabled ? 255 : 140, enabled ? 120 : 90, enabled ? 132 : 98);            // top highlight
     float lw = text_width(label, scale);
-    text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - text_height(scale)) * 0.5f), label, scale, 248, 248, 248);
-    return hovered && in.left_pressed;
+    text(x + std::max(8.0f, (w - lw) * 0.5f), y + std::max(6.0f, (h - text_height(scale)) * 0.5f), label, scale,
+         enabled ? 248 : 180, enabled ? 248 : 180, enabled ? 248 : 184);
+    return enabled && hovered && in.left_pressed;
 }
 
 static bool toggle_button(const Input& in, float x, float y, float w, float h, const std::string& label, bool selected) {
@@ -474,7 +563,11 @@ static void value_box(Game& g, const Input& in, FieldId id, float x, float y, fl
     float ty = y + (h - text_height(VALUE_SCALE)) * 0.5f;
     if (d.kind == FieldDesc::Name || d.kind == FieldDesc::Search) {
         if (!active && shown.empty() && d.kind == FieldDesc::Search) {
-            text_fit(x + 10.0f, ty, "Search tasks", VALUE_SCALE, w - 20.0f, 120, 130, 145);
+            const char* hint = "Search tasks";
+            if (id == FieldId::PlaylistSearch) {
+                hint = "Search playlists";
+            }
+            text_fit(x + 10.0f, ty, hint, VALUE_SCALE, w - 20.0f, 120, 130, 145);
         } else {
             text_fit(x + 10.0f, ty, shown, VALUE_SCALE, w - 20.0f, 240, 244, 248);
         }
@@ -520,7 +613,7 @@ static void color_row(Game& g, const Input& in, float label_x, float value_x, fl
 // ---------------------------------------------------------------------------
 
 static const float CARD_Y = 140.0f;
-static const float CARD_H = 428.0f;
+static const float CARD_H = 608.0f;
 static const float SIDEBAR_W = 280.0f;
 static const float EDITOR_DX = 294.0f;
 static const float EDITOR_W = 662.0f;
@@ -698,12 +791,234 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
     draw_footer_hint(x);
 }
 
+static Playlist* selected_playlist_ptr(Game& g) {
+    if (g.selected_playlist < 0 || g.selected_playlist >= static_cast<int>(g.playlists.size())) {
+        return nullptr;
+    }
+    return &g.playlists[g.selected_playlist];
+}
+
+static void append_playlist_task(Game& g, const std::string& task_name) {
+    Playlist* playlist = selected_playlist_ptr(g);
+    if (!playlist) {
+        return;
+    }
+    playlist->task_names.push_back(task_name);
+    g.selected_playlist_entry = static_cast<int>(playlist->task_names.size()) - 1;
+    reveal_selected_row(g.selected_playlist_entry, static_cast<int>(playlist->task_names.size()), g.playlist_entry_scroll, VISIBLE_PLAYLIST_ENTRY_ROWS);
+}
+
+static void draw_playlist_sidebar(Game& g, const Input& in, float x) {
+    draw_card(x, CARD_Y, SIDEBAR_W, CARD_H);
+
+    float row_x = x + 12.0f;
+    float row_w = SIDEBAR_W - 24.0f;
+    value_box(g, in, FieldId::PlaylistSearch, row_x, CARD_Y + 10.0f, row_w, ROW_H);
+
+    std::vector<int> matches = matching_playlists(g);
+    int count = static_cast<int>(matches.size());
+    int& scroll = g.playlist_scroll;
+    int& selected = g.selected_playlist;
+    int max_scroll = std::max(0, count - VISIBLE_PLAYLIST_ROWS);
+    bool over_list = hit(in, row_x, CARD_Y + 42.0f, row_w, static_cast<float>(VISIBLE_PLAYLIST_ROWS) * LIST_PITCH);
+    if (over_list && in.wheel_y != 0) {
+        scroll = std::max(0, std::min(scroll - in.wheel_y, max_scroll));
+    }
+    scroll = std::max(0, std::min(scroll, max_scroll));
+
+    float list_y = CARD_Y + 42.0f;
+    if (count == 0) {
+        text(row_x + 4.0f, list_y + 8.0f, g.playlists.empty() ? "No playlists" : "No matching playlists", 1.6f, 120, 130, 145);
+    }
+    for (int row = 0; row < VISIBLE_PLAYLIST_ROWS; ++row) {
+        int match_index = scroll + row;
+        if (match_index >= count) {
+            break;
+        }
+        int index = matches[match_index];
+        const std::string& name = g.playlists[index].name;
+        bool is_selected = index == selected;
+        float y = list_y + static_cast<float>(row) * LIST_PITCH;
+        bool clicked = list_button(in, row_x, y, row_w, LIST_ROW_H, name, is_selected);
+        if (is_selected) {
+            rect(row_x, y, 4.0f, LIST_ROW_H, 255, 70, 85);
+        }
+        if (clicked) {
+            menu_blur_field(g);
+            if (is_selected) {
+                start_playlist(g);
+            } else {
+                selected = index;
+                apply_selected_playlist(g);
+            }
+        }
+    }
+
+    float button_y = CARD_Y + CARD_H - 96.0f;
+    if (secondary_button(in, row_x, button_y, 118.0f, BTN_H, "New", BTN_SCALE)) {
+        menu_blur_field(g);
+        new_playlist(g);
+    }
+    if (secondary_button(in, row_x + 128.0f, button_y, row_w - 128.0f, BTN_H, "Delete", BTN_SCALE)) {
+        menu_blur_field(g);
+        delete_playlist(g);
+    }
+    if (secondary_button(in, row_x, button_y + 32.0f, row_w, BTN_H, "Save playlist", BTN_SCALE)) {
+        menu_blur_field(g);
+        if (!g.playlists.empty() || !g.playlist_name.empty()) {
+            save_current_playlist(g);
+            save_settings(g);
+        }
+    }
+}
+
+static void draw_playlists_tab(Game& g, const Input& in, float left) {
+    draw_playlist_sidebar(g, in, left);
+
+    float x = left + EDITOR_DX;
+    draw_card(x, CARD_Y, EDITOR_W, CARD_H);
+    float cl = x + 14.0f;
+    text(cl, CARD_Y + 10.0f, "Playlist", 2.3f, 230, 236, 244);
+
+    float row_y = CARD_Y + 38.0f;
+    field_label(cl, row_y + (ROW_H - text_height(VALUE_SCALE)) * 0.5f, "Name");
+    float name_box_x = cl + 58.0f;
+    float name_box_w = 252.0f;
+    value_box(g, in, FieldId::PlaylistName, name_box_x, row_y, name_box_w, ROW_H);
+
+    float buttons_x = name_box_x + name_box_w + 12.0f;
+    float buttons_right = x + EDITOR_W - 14.0f;
+    float gap = 8.0f;
+    float bw = (buttons_right - buttons_x - gap) * 0.5f;
+    bool can_play = playlist_has_playable_tasks(g);
+    if (primary_button(in, buttons_x, row_y, bw, ROW_H, "Play", BTN_SCALE, can_play)) {
+        menu_blur_field(g);
+        start_playlist(g, 0);
+    }
+    bool can_resume = playlist_can_resume(g);
+    if (primary_button(in, buttons_x + bw + gap, row_y, bw, ROW_H, "Resume", BTN_SCALE, can_resume)) {
+        menu_blur_field(g);
+        resume_playlist(g);
+    }
+    divider(cl, CARD_Y + 72.0f, EDITOR_W - 28.0f);
+
+    if (g.playlists.empty()) {
+        text(cl, CARD_Y + 96.0f, "Create a playlist with New", 1.8f, 150, 162, 178);
+        draw_footer_hint(x);
+        return;
+    }
+
+    Playlist* playlist = selected_playlist_ptr(g);
+    float col_gap = 12.0f;
+    float inner_w = EDITOR_W - 28.0f;
+    float col_w = (inner_w - col_gap) * 0.5f;
+    float add_x = cl;
+    float list_x = cl + col_w + col_gap;
+    float cols_y = CARD_Y + 84.0f;
+    text(add_x, cols_y, "Add tasks", 1.8f, 230, 236, 244);
+    text(list_x, cols_y, "In playlist", 1.8f, 230, 236, 244);
+
+    float search_y = cols_y + 22.0f;
+    value_box(g, in, FieldId::PlaylistAddSearch, add_x, search_y, col_w, ROW_H);
+
+    std::vector<int> add_matches = matching_playlist_add_tasks(g);
+    int add_count = static_cast<int>(add_matches.size());
+    int add_max_scroll = std::max(0, add_count - VISIBLE_PLAYLIST_ADD_ROWS);
+    float add_list_y = search_y + ROW_H + 6.0f;
+    bool over_add = hit(in, add_x, add_list_y, col_w, static_cast<float>(VISIBLE_PLAYLIST_ADD_ROWS) * LIST_PITCH);
+    if (over_add && in.wheel_y != 0) {
+        g.playlist_add_scroll = std::max(0, std::min(g.playlist_add_scroll - in.wheel_y, add_max_scroll));
+    }
+    g.playlist_add_scroll = std::max(0, std::min(g.playlist_add_scroll, add_max_scroll));
+    if (add_count == 0) {
+        text(add_x + 4.0f, add_list_y + 8.0f, "No matching tasks", 1.6f, 120, 130, 145);
+    }
+    for (int row = 0; row < VISIBLE_PLAYLIST_ADD_ROWS; ++row) {
+        int match_index = g.playlist_add_scroll + row;
+        if (match_index >= add_count) {
+            break;
+        }
+        int index = add_matches[match_index];
+        const std::string& name = g.wall_presets[index].name;
+        float y = add_list_y + static_cast<float>(row) * LIST_PITCH;
+        bool clicked = list_button(in, add_x, y, col_w, LIST_ROW_H, name, false);
+        if (clicked) {
+            menu_blur_field(g);
+            append_playlist_task(g, name);
+        }
+    }
+
+    int entry_count = playlist ? static_cast<int>(playlist->task_names.size()) : 0;
+    int entry_max_scroll = std::max(0, entry_count - VISIBLE_PLAYLIST_ENTRY_ROWS);
+    float entry_list_y = search_y;
+    bool over_entries = hit(in, list_x, entry_list_y, col_w, static_cast<float>(VISIBLE_PLAYLIST_ENTRY_ROWS) * LIST_PITCH);
+    if (over_entries && in.wheel_y != 0) {
+        g.playlist_entry_scroll = std::max(0, std::min(g.playlist_entry_scroll - in.wheel_y, entry_max_scroll));
+    }
+    g.playlist_entry_scroll = std::max(0, std::min(g.playlist_entry_scroll, entry_max_scroll));
+    if (entry_count == 0) {
+        text(list_x + 4.0f, entry_list_y + 8.0f, "Add tasks from the list", 1.6f, 120, 130, 145);
+    }
+    for (int row = 0; row < VISIBLE_PLAYLIST_ENTRY_ROWS; ++row) {
+        int index = g.playlist_entry_scroll + row;
+        if (index >= entry_count) {
+            break;
+        }
+        char label[48];
+        std::snprintf(label, sizeof(label), "%d. %s", index + 1, playlist->task_names[index].c_str());
+        bool is_selected = index == g.selected_playlist_entry;
+        float y = entry_list_y + static_cast<float>(row) * LIST_PITCH;
+        bool clicked = list_button(in, list_x, y, col_w, LIST_ROW_H, label, is_selected);
+        if (is_selected) {
+            rect(list_x, y, 4.0f, LIST_ROW_H, 255, 70, 85);
+        }
+        if (clicked) {
+            menu_blur_field(g);
+            if (is_selected) {
+                start_playlist(g, index);
+            } else {
+                g.selected_playlist_entry = index;
+            }
+        }
+    }
+
+    float button_y = CARD_Y + CARD_H - 64.0f;
+    float btn_w = (col_w - 16.0f) / 3.0f;
+    if (secondary_button(in, list_x, button_y, btn_w, BTN_H, "Up", BTN_SCALE)) {
+        menu_blur_field(g);
+        if (playlist && g.selected_playlist_entry > 0 && g.selected_playlist_entry < entry_count) {
+            std::swap(playlist->task_names[g.selected_playlist_entry - 1], playlist->task_names[g.selected_playlist_entry]);
+            g.selected_playlist_entry -= 1;
+            reveal_selected_row(g.selected_playlist_entry, entry_count, g.playlist_entry_scroll, VISIBLE_PLAYLIST_ENTRY_ROWS);
+        }
+    }
+    if (secondary_button(in, list_x + btn_w + 8.0f, button_y, btn_w, BTN_H, "Down", BTN_SCALE)) {
+        menu_blur_field(g);
+        if (playlist && g.selected_playlist_entry >= 0 && g.selected_playlist_entry + 1 < entry_count) {
+            std::swap(playlist->task_names[g.selected_playlist_entry], playlist->task_names[g.selected_playlist_entry + 1]);
+            g.selected_playlist_entry += 1;
+            reveal_selected_row(g.selected_playlist_entry, entry_count, g.playlist_entry_scroll, VISIBLE_PLAYLIST_ENTRY_ROWS);
+        }
+    }
+    if (secondary_button(in, list_x + 2.0f * (btn_w + 8.0f), button_y, btn_w, BTN_H, "Remove", BTN_SCALE)) {
+        menu_blur_field(g);
+        if (playlist && g.selected_playlist_entry >= 0 && g.selected_playlist_entry < entry_count) {
+            playlist->task_names.erase(playlist->task_names.begin() + g.selected_playlist_entry);
+            int next_count = static_cast<int>(playlist->task_names.size());
+            g.selected_playlist_entry = next_count > 0 ? std::min(g.selected_playlist_entry, next_count - 1) : 0;
+            reveal_selected_row(g.selected_playlist_entry, next_count, g.playlist_entry_scroll, VISIBLE_PLAYLIST_ENTRY_ROWS);
+        }
+    }
+
+    draw_footer_hint(x);
+}
+
 static void draw_general_tab(Game& g, const Input& in, float left) {
     float w = SIDEBAR_W + (EDITOR_DX - SIDEBAR_W) + EDITOR_W;
     draw_card(left, CARD_Y, w, CARD_H);
     float cl = left + 14.0f;
-    text(cl, CARD_Y + 12.0f, "General", 2.3f, 230, 236, 244);
-    if (primary_button(in, left + w - 220.0f, CARD_Y + 10.0f, 206.0f, 32.0f, "Save general", 1.85f)) {
+    text(cl, CARD_Y + 12.0f, "Settings", 2.3f, 230, 236, 244);
+    if (primary_button(in, left + w - 220.0f, CARD_Y + 10.0f, 206.0f, 32.0f, "Save settings", 1.85f)) {
         menu_blur_field(g);
         save_settings(g);
     }
@@ -750,7 +1065,7 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
     float ui_scale = ui_scale_for_height(h);
     float ui_w = static_cast<float>(w) / ui_scale;
     float ui_h = static_cast<float>(h) / ui_scale;
-    float menu_scale = std::min(1.0f, std::min((ui_w - 84.0f) / 1040.0f, (ui_h - 42.0f) / 720.0f));
+    float menu_scale = std::min(1.0f, std::min((ui_w - 84.0f) / 1040.0f, (ui_h - 42.0f) / 840.0f));
     menu_scale = std::max(0.25f, menu_scale);
     float base_w = ui_w / menu_scale;
     float base_h = ui_h / menu_scale;
@@ -772,10 +1087,13 @@ void draw_menu(Game& game, const Input& input, int w, int h) {
 
     float tabs_y = 96.0f;
     tab_button(game, ui_input, left, tabs_y, "Tasks", MenuTab::Clicking);
-    tab_button(game, ui_input, left + 168.0f, tabs_y, "General", MenuTab::General);
+    tab_button(game, ui_input, left + 168.0f, tabs_y, "Playlists", MenuTab::Playlists);
+    tab_button(game, ui_input, left + 336.0f, tabs_y, "Settings", MenuTab::Settings);
 
     if (game.menu_tab == MenuTab::Clicking) {
         draw_tasks_tab(game, ui_input, left);
+    } else if (game.menu_tab == MenuTab::Playlists) {
+        draw_playlists_tab(game, ui_input, left);
     } else {
         draw_general_tab(game, ui_input, left);
     }
@@ -796,6 +1114,44 @@ void draw_results(const Game& game, int w, int h) {
     float ui_h = static_cast<float>(h) / ui_scale;
     float cx = ui_w * 0.5f;
 
+    auto centered = [&](float y, const std::string& s, float scale, uint8_t cr, uint8_t cg, uint8_t cb) {
+        text(cx - text_width(s, scale) * 0.5f, y, s, scale, cr, cg, cb);
+    };
+
+    if (game.playlist_active && game.playlist_complete) {
+        int total = 0;
+        for (const RunRecord& session_run : game.playlist_session_runs) {
+            total += session_run.score;
+        }
+        int task_count = static_cast<int>(game.playlist_session_runs.size());
+        int shown = std::min(task_count, 8);
+        float card_w = 560.0f;
+        float card_h = 280.0f + static_cast<float>(shown) * 28.0f;
+        float card_x = cx - card_w * 0.5f;
+        float card_y = ui_h * 0.5f - card_h * 0.5f;
+        draw_card(card_x, card_y, card_w, card_h);
+
+        char buf[96];
+        float y = card_y + 30.0f;
+        centered(y, "Playlist complete", 3.0f, 255, 70, 85); y += 46.0f;
+        centered(y, game.playlist_play_name, 2.0f, 230, 236, 244); y += 40.0f;
+        centered(y, "Total score", 2.0f, 150, 162, 178); y += 28.0f;
+        std::snprintf(buf, sizeof(buf), "%d", total);
+        centered(y, buf, 5.2f, 245, 248, 252); y += 62.0f;
+        for (int i = 0; i < shown; ++i) {
+            const RunRecord& session_run = game.playlist_session_runs[i];
+            std::snprintf(buf, sizeof(buf), "%d. %s  %d", i + 1, session_run.preset_name.c_str(), session_run.score);
+            centered(y, buf, 1.7f, 210, 220, 232);
+            y += 28.0f;
+        }
+        if (task_count > shown) {
+            std::snprintf(buf, sizeof(buf), "+%d more", task_count - shown);
+            centered(y, buf, 1.6f, 150, 162, 178);
+        }
+        centered(card_y + card_h - 28.0f, "Click or Esc to continue", 1.8f, 150, 162, 178);
+        return;
+    }
+
     const RunRecord& run = game.last_run;
     int prev_best = -1;  // best for this scenario/preset before this run
     for (size_t i = 0; i + 1 < game.runs.size(); ++i) {
@@ -809,18 +1165,19 @@ void draw_results(const Game& game, int w, int h) {
     const char* scenario_title = run.kind == ScenarioKind::Tracking ? "Wall tracking" : "Wall clicking";
 
     float card_w = 560.0f;
-    float card_h = 430.0f;
+    float card_h = game.playlist_active ? 460.0f : 430.0f;
     float card_x = cx - card_w * 0.5f;
     float card_y = ui_h * 0.5f - card_h * 0.5f;
     draw_card(card_x, card_y, card_w, card_h);
 
-    auto centered = [&](float y, const std::string& s, float scale, uint8_t cr, uint8_t cg, uint8_t cb) {
-        text(cx - text_width(s, scale) * 0.5f, y, s, scale, cr, cg, cb);
-    };
-
     char buf[64];
     float y = card_y + 30.0f;
     centered(y, "Challenge complete", 3.0f, 255, 70, 85); y += 50.0f;
+    if (game.playlist_active) {
+        std::snprintf(buf, sizeof(buf), "Task %d of %d", game.playlist_play_index + 1,
+                      std::max(1, static_cast<int>(game.playlist_play_tasks.size())));
+        centered(y, buf, 2.0f, 255, 200, 90); y += 30.0f;
+    }
     centered(y, scenario_title, 2.0f, 230, 236, 244); y += 30.0f;
     centered(y, run.preset_name, 2.0f, 150, 162, 178); y += 56.0f;
 
@@ -847,5 +1204,6 @@ void draw_results(const Game& game, int w, int h) {
         centered(y, datebuf, 1.7f, 120, 130, 145);
     }
 
-    centered(card_y + card_h - 28.0f, "Click or Esc to continue", 1.8f, 150, 162, 178);
+    const char* footer = game.playlist_active ? "Click to continue" : "Click or Esc to continue";
+    centered(card_y + card_h - 28.0f, footer, 1.8f, 150, 162, 178);
 }
