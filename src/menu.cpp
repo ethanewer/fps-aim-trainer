@@ -91,9 +91,12 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::PlaylistName: return f_name(&g.playlist_name);
         case FieldId::PlaylistAddSearch: return f_search(&g.playlist_add_search);
         case FieldId::GenSens: return f_float(&g.sensitivity, 0.001f, 10.0f, 3);
-        case FieldId::GenLength: return f_float(&g.crosshair.length, 4.0f, 24.0f, 0);
-        case FieldId::GenGap: return f_float(&g.crosshair.gap, 0.0f, 16.0f, 0);
-        case FieldId::GenThick: return f_float(&g.crosshair.thickness, 1.0f, 6.0f, 0);
+        case FieldId::GenOutlineOpacity: return f_float(&g.crosshair.outline_opacity, 0.0f, 1.0f, 2);
+        case FieldId::GenOutlineThick: return f_float(&g.crosshair.outline_thickness, 1.0f, 6.0f, 0);
+        case FieldId::GenDotThick: return f_float(&g.crosshair.center_dot_thickness, 1.0f, 6.0f, 0);
+        case FieldId::GenLength: return f_float(&g.crosshair.length, 0.0f, 24.0f, 0);
+        case FieldId::GenGap: return f_float(&g.crosshair.gap, 0.0f, 20.0f, 0);
+        case FieldId::GenThick: return f_float(&g.crosshair.thickness, 1.0f, 10.0f, 0);
         case FieldId::GenTargetR: return f_int(&g.target_color.r, 0, 255);
         case FieldId::GenTargetG: return f_int(&g.target_color.g, 0, 255);
         case FieldId::GenTargetB: return f_int(&g.target_color.b, 0, 255);
@@ -197,7 +200,8 @@ static const FieldId PLAYLIST_ORDER[] = {
     FieldId::PlaylistSearch, FieldId::PlaylistName, FieldId::PlaylistAddSearch,
 };
 static const FieldId GEN_ORDER[] = {
-    FieldId::GenSens, FieldId::GenLength, FieldId::GenGap, FieldId::GenThick,
+    FieldId::GenSens, FieldId::GenOutlineOpacity, FieldId::GenOutlineThick, FieldId::GenDotThick,
+    FieldId::GenLength, FieldId::GenThick, FieldId::GenGap,
     FieldId::GenTargetR, FieldId::GenTargetG, FieldId::GenTargetB,
     FieldId::GenWallR, FieldId::GenWallG, FieldId::GenWallB,
 };
@@ -606,6 +610,26 @@ static void color_row(Game& g, const Input& in, float label_x, float value_x, fl
     value_box(g, in, g_id, value_x + 88.0f, row_y, 64.0f, 28.0f);
     value_box(g, in, b_id, value_x + 176.0f, row_y, 64.0f, 28.0f);
     color_swatch(r, green, b, value_x + 256.0f, row_y, 72.0f, 28.0f);
+}
+
+static void on_off_row(Game& g, const Input& in, float label_x, float value_x, float row_y, const std::string& label, bool& value, float box_w, float box_h) {
+    field_label(label_x, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, label);
+    float btn_w = (box_w - 8.0f) * 0.5f;
+    if (toggle_button(in, value_x, row_y, btn_w, box_h, "On", value)) {
+        menu_blur_field(g);
+        value = true;
+    }
+    if (toggle_button(in, value_x + btn_w + 8.0f, row_y, btn_w, box_h, "Off", !value)) {
+        menu_blur_field(g);
+        value = false;
+    }
+}
+
+static void draw_crosshair_preview(const CrosshairSettings& settings, float x, float y, float w, float h) {
+    rect(x, y, w, h, 18, 20, 24);
+    rect(x + 2.0f, y + 2.0f, w - 4.0f, h - 4.0f, 78, 86, 96);
+    rect(x + 2.0f, y + 2.0f, (w - 4.0f) * 0.5f, h - 4.0f, 58, 64, 72);
+    draw_crosshair(settings, x + w * 0.5f, y + h * 0.5f);
 }
 
 // ---------------------------------------------------------------------------
@@ -1023,26 +1047,41 @@ static void draw_general_tab(Game& g, const Input& in, float left) {
         save_settings(g);
     }
 
-    float value_x = cl + 240.0f;
+    float value_x = cl + 268.0f;
     float box_h = 28.0f;
+    float box_w = 120.0f;
 
     float sens_y = CARD_Y + 52.0f;
     field_label(cl, sens_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Sensitivity");
-    value_box(g, in, FieldId::GenSens, value_x, sens_y, 120.0f, box_h);
+    value_box(g, in, FieldId::GenSens, value_x, sens_y, box_w, box_h);
 
     divider(cl, CARD_Y + 92.0f, w - 28.0f);
     text(cl, CARD_Y + 104.0f, "Crosshair", 2.1f, 230, 236, 244);
 
+    const float preview_w = 148.0f;
+    const float preview_h = 148.0f;
+    float preview_x = left + w - 14.0f - preview_w;
+    draw_crosshair_preview(g.crosshair, preview_x, CARD_Y + 104.0f, preview_w, preview_h);
+
     float row_y = CARD_Y + 136.0f;
-    const float pitch = 34.0f;
-    row_single(g, in, cl, value_x, row_y, "Length [px]", FieldId::GenLength, 120.0f, box_h); row_y += pitch;
-    row_single(g, in, cl, value_x, row_y, "Gap [px]", FieldId::GenGap, 120.0f, box_h); row_y += pitch;
-    row_single(g, in, cl, value_x, row_y, "Thickness [px]", FieldId::GenThick, 120.0f, box_h);
+    const float pitch = 32.0f;
+    on_off_row(g, in, cl, value_x, row_y, "Outlines", g.crosshair.outlines, box_w, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Outline Opacity", FieldId::GenOutlineOpacity, box_w, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Outline Thickness [px]", FieldId::GenOutlineThick, box_w, box_h); row_y += pitch;
+    on_off_row(g, in, cl, value_x, row_y, "Center Dot", g.crosshair.center_dot, box_w, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Center Dot Thickness [px]", FieldId::GenDotThick, box_w, box_h); row_y += pitch;
 
-    divider(cl, CARD_Y + 244.0f, w - 28.0f);
-    text(cl, CARD_Y + 256.0f, "Colors", 2.1f, 230, 236, 244);
+    row_y += 8.0f;
+    text(cl, row_y, "Inner Lines", 2.1f, 230, 236, 244);
+    row_y += 28.0f;
+    row_single(g, in, cl, value_x, row_y, "Inner Line Length [px]", FieldId::GenLength, box_w, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Inner Line Thickness [px]", FieldId::GenThick, box_w, box_h); row_y += pitch;
+    row_single(g, in, cl, value_x, row_y, "Inner Line Offset [px]", FieldId::GenGap, box_w, box_h);
 
-    float color_y = CARD_Y + 292.0f;
+    divider(cl, CARD_Y + 462.0f, w - 28.0f);
+    text(cl, CARD_Y + 474.0f, "Colors", 2.1f, 230, 236, 244);
+
+    float color_y = CARD_Y + 510.0f;
     text(value_x + 32.0f - text_width("R", 1.4f) * 0.5f, color_y - 16.0f, "R", 1.4f, 150, 162, 178);
     text(value_x + 120.0f - text_width("G", 1.4f) * 0.5f, color_y - 16.0f, "G", 1.4f, 150, 162, 178);
     text(value_x + 208.0f - text_width("B", 1.4f) * 0.5f, color_y - 16.0f, "B", 1.4f, 150, 162, 178);

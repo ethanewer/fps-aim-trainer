@@ -62,6 +62,9 @@ enum class FieldId {
     PlaylistAddSearch,
     // Settings tab
     GenSens,
+    GenOutlineOpacity,
+    GenOutlineThick,
+    GenDotThick,
     GenLength,
     GenGap,
     GenThick,
@@ -104,6 +107,11 @@ struct CrosshairSettings {
     float length = 9.0f;
     float gap = 4.0f;
     float thickness = 2.0f;
+    bool outlines = false;
+    float outline_opacity = 0.5f;
+    float outline_thickness = 1.0f;
+    bool center_dot = false;
+    float center_dot_thickness = 2.0f;
 };
 
 struct TargetColorSettings {

@@ -420,6 +420,23 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
         }
     } else {
         game.menu_tab = MenuTab::Settings;
+        if (state_index == 1) {
+            game.crosshair.outlines = true;
+            game.crosshair.outline_thickness = 2.0f;
+            game.crosshair.center_dot = true;
+            game.crosshair.center_dot_thickness = 3.0f;
+            game.crosshair.length = 0.0f;
+            game.crosshair.gap = 0.0f;
+            game.crosshair.thickness = 2.0f;
+        } else if (state_index == 2) {
+            game.crosshair.outlines = true;
+            game.crosshair.outline_thickness = 1.0f;
+            game.crosshair.center_dot = true;
+            game.crosshair.center_dot_thickness = 2.0f;
+            game.crosshair.length = 6.0f;
+            game.crosshair.gap = 3.0f;
+            game.crosshair.thickness = 2.0f;
+        }
     }
     Input input;
     int drawable_w = 0, drawable_h = 0;

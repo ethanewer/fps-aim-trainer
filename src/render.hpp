@@ -21,4 +21,5 @@ void text_fit(float x, float y, const std::string& value, float scale, float max
 bool list_button(const Input& input, float x, float y, float w, float h, const std::string& label, bool selected);
 
 // In-scenario world + HUD.
+void draw_crosshair(const CrosshairSettings& settings, float cx, float cy);
 void draw_world(const Game& game, int w, int h);

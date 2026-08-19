@@ -239,7 +239,19 @@ int run_self_test() {
     ok = self_test_check(std::fabs(game.wall_settings.radius_min - 0.01f) < 0.0001f, "wall target radius clamps below 0.01m") && ok;
 
     game.menu_tab = MenuTab::Settings;
-    menu_focus_field(game, FieldId::GenThick);
+    menu_focus_field(game, FieldId::GenSens);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenOutlineOpacity, "settings tab navigation reaches outline opacity") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenOutlineThick, "settings tab navigation reaches outline thickness") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenDotThick, "settings tab navigation reaches center dot thickness") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenLength, "settings tab navigation reaches inner line length") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenThick, "settings tab navigation reaches inner line thickness") && ok;
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::GenGap, "settings tab navigation reaches inner line offset") && ok;
     menu_handle_edit(game, tab_fwd);
     ok = self_test_check(game.active_field == FieldId::GenTargetR, "settings tab navigation reaches target color red") && ok;
     menu_handle_edit(game, tab_fwd);
@@ -407,7 +419,14 @@ int run_self_test() {
     game.wall_settings.radius_max = 0.22f;
     save_current_wall_preset(game);
     game.sensitivity = 0.777f;
-    game.crosshair = {14.0f, 6.0f, 3.0f};
+    game.crosshair.length = 14.0f;
+    game.crosshair.gap = 6.0f;
+    game.crosshair.thickness = 3.0f;
+    game.crosshair.outlines = true;
+    game.crosshair.outline_opacity = 0.75f;
+    game.crosshair.outline_thickness = 2.0f;
+    game.crosshair.center_dot = true;
+    game.crosshair.center_dot_thickness = 4.0f;
     game.target_color = {32, 210, 244};
     game.wall_color = {44, 55, 66};
     save_settings(game);
@@ -416,8 +435,17 @@ int run_self_test() {
     load_settings(loaded);
     ok = self_test_check(std::fabs(loaded.sensitivity - 0.777f) < 0.0001f, "saved general sensitivity loads") && ok;
     ok = self_test_check(std::fabs(loaded.crosshair.length - 14.0f) < 0.0001f, "saved crosshair loads") && ok;
+    ok = self_test_check(loaded.crosshair.outlines && std::fabs(loaded.crosshair.outline_opacity - 0.75f) < 0.0001f && std::fabs(loaded.crosshair.outline_thickness - 2.0f) < 0.0001f, "saved crosshair outlines load") && ok;
+    ok = self_test_check(loaded.crosshair.center_dot && std::fabs(loaded.crosshair.center_dot_thickness - 4.0f) < 0.0001f, "saved crosshair center dot loads") && ok;
     ok = self_test_check(loaded.target_color.r == 32 && loaded.target_color.g == 210 && loaded.target_color.b == 244, "saved target color loads") && ok;
     ok = self_test_check(loaded.wall_color.r == 44 && loaded.wall_color.g == 55 && loaded.wall_color.b == 66, "saved wall color loads") && ok;
+
+    game.crosshair.length = 0.0f;
+    game.crosshair.center_dot = true;
+    save_settings(game);
+    Game zero_lines;
+    load_settings(zero_lines);
+    ok = self_test_check(std::fabs(zero_lines.crosshair.length) < 0.0001f && zero_lines.crosshair.center_dot, "inner line length 0 saves as a hidden-lines crosshair") && ok;
     ok = self_test_check(!loaded.wall_presets.empty(), "saved wall presets load") && ok;
     ok = self_test_check(loaded.wall_preset_name == "TINY PASU", "selected named wall preset loads into editor") && ok;
     ok = self_test_check(loaded.wall_settings.target_count_min == 8 && loaded.wall_settings.target_count_max == 8, "selected wall preset target count loads") && ok;
@@ -442,6 +470,21 @@ int run_self_test() {
     normalize_settings(color_clamp);
     ok = self_test_check(color_clamp.target_color.r == 0 && color_clamp.target_color.g == 128 && color_clamp.target_color.b == 255, "target color channels clamp to RGB byte range") && ok;
     ok = self_test_check(color_clamp.wall_color.r == 255 && color_clamp.wall_color.g == 0 && color_clamp.wall_color.b == 64, "wall color channels clamp to RGB byte range") && ok;
+
+    Game crosshair_clamp;
+    crosshair_clamp.crosshair.length = -4.0f;
+    crosshair_clamp.crosshair.gap = 99.0f;
+    crosshair_clamp.crosshair.thickness = 0.0f;
+    crosshair_clamp.crosshair.outline_opacity = 1.5f;
+    crosshair_clamp.crosshair.outline_thickness = 0.0f;
+    crosshair_clamp.crosshair.center_dot_thickness = 12.0f;
+    normalize_settings(crosshair_clamp);
+    ok = self_test_check(std::fabs(crosshair_clamp.crosshair.length) < 0.0001f, "crosshair length 0 hides the inner lines") && ok;
+    ok = self_test_check(std::fabs(crosshair_clamp.crosshair.gap - 20.0f) < 0.0001f, "crosshair offset clamps to 20") && ok;
+    ok = self_test_check(std::fabs(crosshair_clamp.crosshair.thickness - 1.0f) < 0.0001f, "crosshair thickness clamps to at least 1") && ok;
+    ok = self_test_check(std::fabs(crosshair_clamp.crosshair.outline_opacity - 1.0f) < 0.0001f, "outline opacity clamps to 1") && ok;
+    ok = self_test_check(std::fabs(crosshair_clamp.crosshair.outline_thickness - 1.0f) < 0.0001f, "outline thickness clamps to at least 1") && ok;
+    ok = self_test_check(std::fabs(crosshair_clamp.crosshair.center_dot_thickness - 6.0f) < 0.0001f, "center dot thickness clamps to 6") && ok;
 
     {
         std::ofstream old("build/self-test-settings.cfg");
@@ -570,6 +613,32 @@ int run_self_test() {
     load_settings(v10_loaded);
     ok = self_test_check(std::fabs(v10_loaded.wall_settings.wall_distance_min - 5.0f) < 0.0001f && std::fabs(v10_loaded.wall_settings.wall_distance_max - 6.0f) < 0.0001f, "v10 built-in wall range is not rewritten") && ok;
     ok = self_test_check(v10_loaded.playlists.empty(), "v10 settings load with no playlists") && ok;
+
+    {
+        std::ofstream v11("build/self-test-settings.cfg");
+        v11 << "version 11\n";
+        v11 << "sensitivity 0.35\n";
+        v11 << "crosshair 9 4 2\n";
+        v11 << "selected_wall 0\n";
+        v11 << "wall_preset \"1W2T DYNAMIC\" 3 3 8 10 0.08 0.08 1 1.5 0 0.75 8 8 1 2 0 1\n";
+    }
+    Game v11_loaded;
+    load_settings(v11_loaded);
+    ok = self_test_check(std::fabs(v11_loaded.crosshair.length - 9.0f) < 0.0001f && std::fabs(v11_loaded.crosshair.gap - 4.0f) < 0.0001f && std::fabs(v11_loaded.crosshair.thickness - 2.0f) < 0.0001f, "v11 three-value crosshair still loads") && ok;
+    ok = self_test_check(!v11_loaded.crosshair.outlines && !v11_loaded.crosshair.center_dot, "v11 crosshair migrates with outlines and center dot off") && ok;
+    ok = self_test_check(std::fabs(v11_loaded.crosshair.outline_opacity - 0.5f) < 0.0001f && std::fabs(v11_loaded.crosshair.outline_thickness - 1.0f) < 0.0001f && std::fabs(v11_loaded.crosshair.center_dot_thickness - 2.0f) < 0.0001f, "v11 crosshair keeps default outline and dot thickness") && ok;
+
+    {
+        std::ofstream v12_no_opacity("build/self-test-settings.cfg");
+        v12_no_opacity << "version 12\n";
+        v12_no_opacity << "crosshair 8 3 2 1 2 1 4\n";
+        v12_no_opacity << "selected_wall 0\n";
+        v12_no_opacity << "wall_preset \"1W2T DYNAMIC\" 3 3 8 10 0.08 0.08 1 1.5 0 0.75 8 8 1 2 0 1\n";
+    }
+    Game v12_no_opacity_loaded;
+    load_settings(v12_no_opacity_loaded);
+    ok = self_test_check(v12_no_opacity_loaded.crosshair.outlines && v12_no_opacity_loaded.crosshair.center_dot && std::fabs(v12_no_opacity_loaded.crosshair.outline_thickness - 2.0f) < 0.0001f && std::fabs(v12_no_opacity_loaded.crosshair.center_dot_thickness - 4.0f) < 0.0001f, "v12 crosshair without opacity still loads outlines and center dot") && ok;
+    ok = self_test_check(std::fabs(v12_no_opacity_loaded.crosshair.outline_opacity - 0.5f) < 0.0001f, "v12 crosshair without opacity defaults to 0.5") && ok;
 
     {
         Game playlist_save;

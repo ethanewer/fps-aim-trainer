@@ -152,6 +152,8 @@ every menu or rendering change.
 #          6=tracking mode selected  7=task search (strafe)
 #          Playlists tab: 0=sample playlist  1=empty  2=long name  3=long list
 #                         7=add-task search  8=long entry list  9=resume available
+#          Settings tab:  0=default  1=center-dot only (length 0, outlines on)
+#                         2=inner lines + center dot + outlines
 ./build/aim-trainer --debug-menu /tmp/menu.bmp 1920 1080 0 0
 
 # Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=clicking, 1=tracking)
@@ -203,7 +205,9 @@ alignment, overflow, and focus highlighting.
   The room/far-plane depth is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files. (Current: `version 11`; v10 files load with
+  format. Don't silently break existing `.cfg` files. (Current: `version 12`; v12 files without
+  outline opacity default to 0.5; v11 three-value
+  `crosshair` lines load with outlines and center dot off; v10 files load with
   empty playlists; v9 built-in presets
   migrate to an 8-10m wall range; v8 clicking presets with unused health 0 migrate to one-shot
   health 1; v7 wall presets migrate to clicking with health 1; v4 single wall distance migrates

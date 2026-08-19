@@ -99,9 +99,12 @@ static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
 }
 
 static void normalize_crosshair(CrosshairSettings& settings) {
-    settings.length = clampf(settings.length, 4.0f, 24.0f);
-    settings.gap = clampf(settings.gap, 0.0f, 16.0f);
-    settings.thickness = clampf(settings.thickness, 1.0f, 6.0f);
+    settings.length = clampf(settings.length, 0.0f, 24.0f);
+    settings.gap = clampf(settings.gap, 0.0f, 20.0f);
+    settings.thickness = clampf(settings.thickness, 1.0f, 10.0f);
+    settings.outline_opacity = clampf(settings.outline_opacity, 0.0f, 1.0f);
+    settings.outline_thickness = clampf(settings.outline_thickness, 1.0f, 6.0f);
+    settings.center_dot_thickness = clampf(settings.center_dot_thickness, 1.0f, 6.0f);
 }
 
 static void normalize_target_color(TargetColorSettings& settings) {
@@ -684,9 +687,13 @@ void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 11\n";
+    out << "version 12\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
-    out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " " << normalized.crosshair.thickness << "\n";
+    out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " "
+        << normalized.crosshair.thickness << " "
+        << (normalized.crosshair.outlines ? 1 : 0) << " " << normalized.crosshair.outline_opacity << " "
+        << normalized.crosshair.outline_thickness << " "
+        << (normalized.crosshair.center_dot ? 1 : 0) << " " << normalized.crosshair.center_dot_thickness << "\n";
     out << "target_color " << normalized.target_color.r << " " << normalized.target_color.g << " " << normalized.target_color.b << "\n";
     out << "wall_color " << normalized.wall_color.r << " " << normalized.wall_color.g << " " << normalized.wall_color.b << "\n";
     out << "selected_wall " << normalized.selected_wall_preset << "\n";
@@ -743,6 +750,25 @@ void load_settings(Game& game) {
             row >> game.sensitivity;
         } else if (key == "crosshair") {
             row >> game.crosshair.length >> game.crosshair.gap >> game.crosshair.thickness;
+            std::vector<float> extra;
+            float value = 0.0f;
+            while (row >> value) {
+                extra.push_back(value);
+            }
+            if (extra.size() >= 5) {
+                // outlines, opacity, thickness, center_dot, dot_thickness
+                game.crosshair.outlines = extra[0] != 0.0f;
+                game.crosshair.outline_opacity = extra[1];
+                game.crosshair.outline_thickness = extra[2];
+                game.crosshair.center_dot = extra[3] != 0.0f;
+                game.crosshair.center_dot_thickness = extra[4];
+            } else if (extra.size() >= 4) {
+                // v12 without opacity: outlines, thickness, center_dot, dot_thickness
+                game.crosshair.outlines = extra[0] != 0.0f;
+                game.crosshair.outline_thickness = extra[1];
+                game.crosshair.center_dot = extra[2] != 0.0f;
+                game.crosshair.center_dot_thickness = extra[3];
+            }
         } else if (key == "target_color") {
             row >> game.target_color.r >> game.target_color.g >> game.target_color.b;
         } else if (key == "wall_color") {

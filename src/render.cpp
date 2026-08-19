@@ -170,6 +170,40 @@ void rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, u
     glDisable(GL_BLEND);
 }
 
+void draw_crosshair(const CrosshairSettings& settings, float cx, float cy) {
+    struct Quad {
+        float x;
+        float y;
+        float w;
+        float h;
+    };
+    Quad quads[5];
+    int count = 0;
+    float len = settings.length;
+    float gap = settings.gap;
+    float thick = settings.thickness;
+    if (len > 0.0f) {
+        quads[count++] = {cx - gap - len, cy - thick * 0.5f, len, thick};
+        quads[count++] = {cx + gap, cy - thick * 0.5f, len, thick};
+        quads[count++] = {cx - thick * 0.5f, cy - gap - len, thick, len};
+        quads[count++] = {cx - thick * 0.5f, cy + gap, thick, len};
+    }
+    if (settings.center_dot) {
+        float dot = settings.center_dot_thickness;
+        quads[count++] = {cx - dot * 0.5f, cy - dot * 0.5f, dot, dot};
+    }
+    if (settings.outlines) {
+        float outline = settings.outline_thickness;
+        uint8_t outline_a = static_cast<uint8_t>(std::lround(clampf(settings.outline_opacity, 0.0f, 1.0f) * 255.0f));
+        for (int i = 0; i < count; ++i) {
+            rect(quads[i].x - outline, quads[i].y - outline, quads[i].w + outline * 2.0f, quads[i].h + outline * 2.0f, 0, 0, 0, outline_a);
+        }
+    }
+    for (int i = 0; i < count; ++i) {
+        rect(quads[i].x, quads[i].y, quads[i].w, quads[i].h, 245, 248, 252);
+    }
+}
+
 bool list_button(const Input& input, float x, float y, float w, float h, const std::string& label, bool selected) {
     bool hovered = input.mouse_x >= x && input.mouse_x <= x + w && input.mouse_y >= y && input.mouse_y <= y + h;
     if (selected) rect(x, y, w, h, 86, 98, 114);
@@ -212,13 +246,7 @@ void draw_world(const Game& game, int w, int h) {
     float ui_w = static_cast<float>(w) / ui_scale;
     float ui_h = static_cast<float>(h) / ui_scale;
     float cx = ui_w * 0.5f, cy = ui_h * 0.5f;
-    float len = game.crosshair.length;
-    float gap = game.crosshair.gap;
-    float thick = game.crosshair.thickness;
-    rect(cx - gap - len, cy - thick * 0.5f, len, thick, 245, 248, 252);
-    rect(cx + gap, cy - thick * 0.5f, len, thick, 245, 248, 252);
-    rect(cx - thick * 0.5f, cy - gap - len, thick, len, 245, 248, 252);
-    rect(cx - thick * 0.5f, cy + gap, thick, len, 245, 248, 252);
+    draw_crosshair(game.crosshair, cx, cy);
     char line[160];
     std::snprintf(line, sizeof(line), "FOV 103  Sens %.3f", game.sensitivity);
     std::string sens_line = line;

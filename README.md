@@ -25,7 +25,8 @@ In the menu:
   Clicking an already-selected preset in the list also starts a challenge.
 - **New** copies the current selected/editor values in that tab.
 - **Save preset** / **Save playlist** / **Save settings** persist settings. Settings include
-  sensitivity, crosshair, target color, and wall color.
+  sensitivity, a Valorant-style crosshair (inner lines, optional center dot, optional black
+  outlines), target color, and wall color. Inner line length `0` hides the four arms.
 - Playlists are ordered lists of existing tasks. Add tasks from the catalog, reorder with
   **Up** / **Down**, and **Play** runs each one as a 60-second challenge from the start,
   with results between tasks and a summary at the end. Clicking an already-selected playlist
@@ -113,6 +114,9 @@ This installs/refreshes `Aim Trainer Dev`, which uses the same launcher, so doub
 - Default presets come from `scripts/default-tasks.py`. A default task is size, wall (`close` / `mid` / `far`), a fixed target count, movement (`static` / `strafing` / `dynamic`), mode (`clicking` / `tracking`), and health. Clicking defaults are one-shot. Target-switching defaults are tracking copies of the dynamic/strafe clicking tasks (health `20` on dynamic, `10` on strafe). Tracking defaults are one small dynamic target with infinite health. Mid wall is omitted from the name; close and far append `CLOSE` or `FAR`; switching names include `SWITCHING` and the health value; tracking names include `TRACKING`. Edit that Python file and click **Reset tasks** to reload it immediately (no rebuild). `python scripts/default-tasks.py` still regenerates the committed JSON/C++ table for the next compile.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
+- The Settings tab crosshair is Valorant-style: optional black outlines (opacity and thickness),
+  an optional square center dot, and inner lines whose length, thickness, and offset (gap) can
+  be edited. Set inner line length to `0` to hide the four arms and keep only the center dot.
 - User-facing distance, size, speed, and acceleration settings are in meters, meters/second, and meters/second². The current camera height is treated as a 2 meter reference without moving the camera.
 
 ## Source Layout
