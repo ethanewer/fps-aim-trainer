@@ -6,13 +6,14 @@ A default task is:
     size        target radius:  normal | small | extra_small
     wall        close | mid | far  (default mid; close/far are appended to the name)
     targets     how many targets are alive at once (fixed count)
-    movement    static | strafing | dynamic
+    movement    static | strafing | dynamic | bounce
     mode        clicking | tracking
     health      1 = one shot, N = N hits, 0 = infinite
 
 Clicking defaults are one-shot. Target-switching defaults are tracking with health
 20 on dynamic and 10 on strafe. Tracking defaults are one small dynamic target with
-infinite health.
+infinite health. Bounce 180 uses a separate in-game editor (spawn radius, jump
+angle, takeoff speed, camera height, gravity).
 
 Edit DEFAULT_TASKS, then from the repo root:
 
@@ -67,6 +68,7 @@ class Movement(Enum):
     STATIC = "static"
     STRAFING = "strafing"
     DYNAMIC = "dynamic"
+    BOUNCE = "bounce"
 
     @property
     def preset_label(self) -> str:
@@ -74,6 +76,7 @@ class Movement(Enum):
             Movement.STATIC: "STATIC",
             Movement.STRAFING: "STRAFE",
             Movement.DYNAMIC: "DYNAMIC",
+            Movement.BOUNCE: "BOUNCE",
         }[self]
 
     @property
@@ -82,6 +85,7 @@ class Movement(Enum):
             Movement.STATIC: (0.0, 0.0),
             Movement.STRAFING: (1.0, 1.5),
             Movement.DYNAMIC: (1.0, 1.5),
+            Movement.BOUNCE: (1.0, 1.5),
         }[self]
 
     @property
@@ -90,6 +94,7 @@ class Movement(Enum):
             Movement.STATIC: (0.0, 0.0),
             Movement.STRAFING: (0.0, 0.0),
             Movement.DYNAMIC: (0.0, 0.75),
+            Movement.BOUNCE: (0.0, 0.75),
         }[self]
 
     @property
@@ -98,6 +103,7 @@ class Movement(Enum):
             Movement.STATIC: (0.0, 0.0),
             Movement.STRAFING: (8.0, 8.0),
             Movement.DYNAMIC: (8.0, 8.0),
+            Movement.BOUNCE: (0.0, 0.0),
         }[self]
 
     @property
@@ -106,6 +112,7 @@ class Movement(Enum):
             Movement.STATIC: (0.0, 0.0),
             Movement.STRAFING: (1.0, 4.0),
             Movement.DYNAMIC: (1.0, 2.0),
+            Movement.BOUNCE: (0.0, 0.0),
         }[self]
 
 
@@ -177,6 +184,8 @@ class Task:
     def preset_name(self) -> str:
         if self.name:
             return self.name
+        if self.movement is Movement.BOUNCE:
+            return "THE BOUNCE 180"
         parts = [
             f"1W{self.target_count}{self.size.name_suffix}",
             self.movement.preset_label,
@@ -217,6 +226,12 @@ class Task:
             "v_speed": list(self.movement.v_speed),
             "accel": list(self.movement.accel),
             "dir_change": list(self.movement.dir_change),
+            "bounce": 1 if self.movement is Movement.BOUNCE else 0,
+            "bounce_angle": [30.0, 75.0],
+            "bounce_speed": [4.0, 6.0],
+            "bounce_camera": 0.25,
+            "bounce_gravity": 6.0,
+            "bounce_dir_change": 0.0,
         }
 
 
@@ -288,6 +303,19 @@ for wall in [Wall.MID, Wall.CLOSE]:
         )
     )
 
+# KovaaK-style Bounce 180: four balls on cylinders around the player,
+# parabolic hops, configurable camera and gravity. Spawn min/max is the
+# cylinder radius range (8-10m). Jump angle 30-75°, takeoff 4-6 m/s,
+# camera 0.25 m. Gravity defaults to 6 m/s².
+DEFAULT_TASKS.append(
+    Task(
+        size=Size.NORMAL,
+        targets=4,
+        movement=Movement.BOUNCE,
+        name="THE BOUNCE 180",
+    )
+)
+
 
 def _assert_names() -> None:
     # Naming examples are independent of DEFAULT_TASKS so editing that list
@@ -307,6 +335,14 @@ def _assert_names() -> None:
         raise AssertionError(switch.preset_name)
     if track.preset_name != "1W1TS DYNAMIC TRACKING CLOSE":
         raise AssertionError(track.preset_name)
+    bounce = Task(
+        size=Size.NORMAL,
+        targets=4,
+        movement=Movement.BOUNCE,
+        name="THE BOUNCE 180",
+    )
+    if bounce.preset_name != "THE BOUNCE 180":
+        raise AssertionError(bounce.preset_name)
 
 
 def _f(value: Number) -> str:
@@ -339,6 +375,14 @@ def render_inc(task_list: Iterable[Task]) -> str:
         "    float accel_max;",
         "    float change_min;",
         "    float change_max;",
+        "    int bounce;",
+        "    float bounce_angle_min;",
+        "    float bounce_angle_max;",
+        "    float bounce_speed_min;",
+        "    float bounce_speed_max;",
+        "    float bounce_camera;",
+        "    float bounce_gravity;",
+        "    float bounce_dir_change;",
         "};",
         "",
         "static const DefaultTaskDef kDefaultTasks[] = {",
@@ -356,7 +400,13 @@ def render_inc(task_list: Iterable[Task]) -> str:
             f"{_f(engine['h_speed'][0])}, {_f(engine['h_speed'][1])}, "
             f"{_f(engine['v_speed'][0])}, {_f(engine['v_speed'][1])}, "
             f"{_f(engine['accel'][0])}, {_f(engine['accel'][1])}, "
-            f"{_f(engine['dir_change'][0])}, {_f(engine['dir_change'][1])}"
+            f"{_f(engine['dir_change'][0])}, {_f(engine['dir_change'][1])}, "
+            f"{int(engine['bounce'])}, "
+            f"{_f(engine['bounce_angle'][0])}, {_f(engine['bounce_angle'][1])}, "
+            f"{_f(engine['bounce_speed'][0])}, {_f(engine['bounce_speed'][1])}, "
+            f"{_f(engine['bounce_camera'])}, "
+            f"{_f(engine['bounce_gravity'])}, "
+            f"{_f(engine['bounce_dir_change'])}"
             "},"
         )
     lines.append("};")
@@ -422,7 +472,9 @@ def dump_engine_lines(task_list: Sequence[Task], file=sys.stdout) -> None:
             " {targets[0]} {targets[1]} {wall[0]} {wall[1]} {radius[0]} {radius[1]}"
             " {h_speed[0]} {h_speed[1]} {v_speed[0]} {v_speed[1]}"
             " {accel[0]} {accel[1]} {dir_change[0]} {dir_change[1]}"
-            " {tracking} {health}\n".format(
+            " {tracking} {health} {bounce}"
+            " {bounce_angle[0]} {bounce_angle[1]} {bounce_speed[0]} {bounce_speed[1]}"
+            " {bounce_camera} {bounce_gravity} {bounce_dir_change}\n".format(
                 targets=engine["targets"],
                 wall=engine["wall"],
                 radius=engine["radius"],
@@ -432,6 +484,12 @@ def dump_engine_lines(task_list: Sequence[Task], file=sys.stdout) -> None:
                 dir_change=engine["dir_change"],
                 tracking=1 if engine["mode"] == Mode.TRACKING.value else 0,
                 health=int(engine["health"]),
+                bounce=int(engine["bounce"]),
+                bounce_angle=engine["bounce_angle"],
+                bounce_speed=engine["bounce_speed"],
+                bounce_camera=engine["bounce_camera"],
+                bounce_gravity=engine["bounce_gravity"],
+                bounce_dir_change=engine["bounce_dir_change"],
             )
         )
 

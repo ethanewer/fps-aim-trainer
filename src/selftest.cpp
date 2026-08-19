@@ -1,5 +1,6 @@
 #include "selftest.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -80,9 +81,10 @@ int run_self_test() {
         "1W4TES STRAFE SWITCHING 10 CLOSE",
         "1W1TS DYNAMIC TRACKING",
         "1W1TS DYNAMIC TRACKING CLOSE",
+        "THE BOUNCE 180",
     };
     const int default_wall_count = static_cast<int>(sizeof(default_wall_order) / sizeof(default_wall_order[0]));
-    ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking, switching, and tracking presets") && ok;
+    ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking, switching, tracking, and bounce presets") && ok;
     for (int i = 0; i < default_wall_count && i < static_cast<int>(game.wall_presets.size()); ++i) {
         ok = self_test_check(game.wall_presets[i].name == default_wall_order[i], "default wall presets are in sensible order") && ok;
     }
@@ -104,7 +106,14 @@ int run_self_test() {
     ok = self_test_check(switch_index >= 0 && game.wall_presets[switch_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_index].settings.target_health == 20 && game.wall_presets[switch_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[switch_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "target-switching default copies dynamic clicking motion with 20 health") && ok;
     ok = self_test_check(switch_strafe_index >= 0 && game.wall_presets[switch_strafe_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_strafe_index].settings.target_health == 10 && std::fabs(game.wall_presets[switch_strafe_index].settings.vertical_speed_max) < 0.0001f, "strafe switching default uses 10 health") && ok;
     ok = self_test_check(track_index >= 0 && game.wall_presets[track_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[track_index].settings.target_health == 0 && game.wall_presets[track_index].settings.target_count_min == 1 && std::fabs(game.wall_presets[track_index].settings.radius_min - 0.04f) < 0.0001f, "tracking default is one small dynamic target with infinite health") && ok;
+    int bounce_index = find_wall_preset(game, "THE BOUNCE 180");
+    ok = self_test_check(bounce_index >= 0 && game.wall_presets[bounce_index].settings.bounce && game.wall_presets[bounce_index].settings.target_count_min == 4 && std::fabs(game.wall_presets[bounce_index].settings.radius_min - 0.08f) < 0.0001f, "bounce 180 default is a four-ball clicking task with normal radius") && ok;
+    ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_min - 30.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_max - 75.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_max - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_camera_height_m - 0.25f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_gravity_m - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_dir_change_p - 0.0f) < 0.0001f, "bounce 180 default jump angle, takeoff speed, camera height, gravity, and dir-change probability are set") && ok;
+    ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_max - 10.0f) < 0.0001f, "bounce 180 default uses the same 8-10m range as 1W2T DYNAMIC") && ok;
     for (const WallPreset& preset : game.wall_presets) {
+        if (preset.settings.bounce) {
+            continue;
+        }
         bool close_wall = preset.name.size() >= 6 && preset.name.compare(preset.name.size() - 6, 6, " CLOSE") == 0;
         float expected_min = close_wall ? 4.0f : 8.0f;
         float expected_max = close_wall ? 5.0f : 10.0f;
@@ -218,6 +227,32 @@ int run_self_test() {
     ok = self_test_check(game.active_field == FieldId::WallRadiusMin, "tab advances from wall max to radius") && ok;
     menu_blur_field(game);
 
+    game.wall_settings.bounce = true;
+    menu_focus_field(game, FieldId::WallRadiusMax);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::BounceAngleMin, "bounce tab order skips wall motion fields and reaches jump angle") && ok;
+    menu_focus_field(game, FieldId::BounceCamera);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::BounceGravity, "bounce tab order reaches gravity after camera height") && ok;
+    menu_focus_field(game, FieldId::BounceGravity);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::BounceDirChange, "bounce tab order reaches dir-change probability after gravity") && ok;
+    menu_focus_field(game, FieldId::BounceDirChange);
+    menu_handle_edit(game, tab_fwd);
+    ok = self_test_check(game.active_field == FieldId::PresetSearch, "bounce tab order wraps after dir-change probability") && ok;
+    game.wall_settings.bounce_dir_change_p = -0.4f;
+    normalize_settings(game);
+    ok = self_test_check(std::fabs(game.wall_settings.bounce_dir_change_p - 0.0f) < 0.0001f, "bounce 180 dir-change probability clamps below zero") && ok;
+    game.wall_settings.bounce_dir_change_p = 1.4f;
+    normalize_settings(game);
+    ok = self_test_check(std::fabs(game.wall_settings.bounce_dir_change_p - 1.0f) < 0.0001f, "bounce 180 dir-change probability clamps above one") && ok;
+    game.wall_settings.bounce = false;
+    menu_blur_field(game);
+
+    game.wall_settings.bounce_camera_height_m = 0.10f;
+    normalize_settings(game);
+    ok = self_test_check(std::fabs(game.wall_settings.bounce_camera_height_m - BOUNCE_CAMERA_HEIGHT_MIN_M) < 0.0001f, "bounce 180 camera height clamps to 0.25m") && ok;
+
     game.wall_settings.target_health = 2000;
     normalize_settings(game);
     ok = self_test_check(game.wall_settings.target_health == WALL_TARGET_HEALTH_MAX, "target health clamps to the maximum") && ok;
@@ -327,7 +362,7 @@ int run_self_test() {
         reset_test.wall_preset_scroll = 1;
         reset_test.active_field = FieldId::WallName;
         reset_wall_presets(reset_test);
-        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 26 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
+        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 27 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
         ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W2T DYNAMIC", "reset tasks selects the first default task") && ok;
         ok = self_test_check(std::fabs(reset_test.wall_settings.radius_min - 0.08f) < 0.0001f && std::fabs(reset_test.wall_settings.horizontal_speed_max - 1.5f) < 0.0001f, "reset tasks restores compiled default settings") && ok;
         ok = self_test_check(reset_test.active_field == FieldId::None, "reset tasks exits text edit mode") && ok;
@@ -639,6 +674,74 @@ int run_self_test() {
     load_settings(v12_no_opacity_loaded);
     ok = self_test_check(v12_no_opacity_loaded.crosshair.outlines && v12_no_opacity_loaded.crosshair.center_dot && std::fabs(v12_no_opacity_loaded.crosshair.outline_thickness - 2.0f) < 0.0001f && std::fabs(v12_no_opacity_loaded.crosshair.center_dot_thickness - 4.0f) < 0.0001f, "v12 crosshair without opacity still loads outlines and center dot") && ok;
     ok = self_test_check(std::fabs(v12_no_opacity_loaded.crosshair.outline_opacity - 0.5f) < 0.0001f, "v12 crosshair without opacity defaults to 0.5") && ok;
+    ok = self_test_check(!v12_no_opacity_loaded.wall_settings.bounce, "v12 wall presets load with bounce off") && ok;
+    ok = self_test_check(std::fabs(v12_no_opacity_loaded.wall_settings.bounce_gravity_m - BOUNCE_GRAVITY_M) < 0.0001f && std::fabs(v12_no_opacity_loaded.wall_settings.bounce_dir_change_p - 0.0f) < 0.0001f, "v12 wall presets keep default bounce gravity and zero dir-change probability") && ok;
+
+    {
+        Game bounce_save;
+        bounce_save.wall_presets = {{"THE BOUNCE 180", WallClickSettings{}}};
+        bounce_save.wall_presets[0].settings.bounce = true;
+        bounce_save.wall_presets[0].settings.target_count_min = 1;
+        bounce_save.wall_presets[0].settings.target_count_max = 1;
+        bounce_save.wall_presets[0].settings.radius_min = 0.08f;
+        bounce_save.wall_presets[0].settings.radius_max = 0.08f;
+        bounce_save.wall_presets[0].settings.bounce_angle_min = 40.0f;
+        bounce_save.wall_presets[0].settings.bounce_angle_max = 55.0f;
+        bounce_save.wall_presets[0].settings.bounce_speed_min = 3.0f;
+        bounce_save.wall_presets[0].settings.bounce_speed_max = 8.0f;
+        bounce_save.wall_presets[0].settings.bounce_camera_height_m = 1.1f;
+        bounce_save.wall_presets[0].settings.bounce_gravity_m = 12.0f;
+        bounce_save.wall_presets[0].settings.bounce_dir_change_p = 0.35f;
+        bounce_save.selected_wall_preset = 0;
+        save_settings(bounce_save);
+        Game bounce_loaded;
+        load_settings(bounce_loaded);
+        ok = self_test_check(bounce_loaded.wall_settings.bounce && bounce_loaded.wall_preset_name == "THE BOUNCE 180", "v13 bounce flag saves and reloads") && ok;
+        ok = self_test_check(std::fabs(bounce_loaded.wall_settings.bounce_angle_min - 40.0f) < 0.0001f && std::fabs(bounce_loaded.wall_settings.bounce_speed_max - 8.0f) < 0.0001f && std::fabs(bounce_loaded.wall_settings.bounce_camera_height_m - 1.1f) < 0.0001f && std::fabs(bounce_loaded.wall_settings.bounce_gravity_m - 12.0f) < 0.0001f && std::fabs(bounce_loaded.wall_settings.bounce_dir_change_p - 0.35f) < 0.0001f, "bounce 180 jump settings save and reload") && ok;
+    }
+
+    {
+        std::ofstream v13_bounce("build/self-test-settings.cfg");
+        v13_bounce << "version 13\n";
+        v13_bounce << "selected_wall 0\n";
+        v13_bounce << "wall_preset \"THE BOUNCE 180\" 1 1 3.5556 3.5556 0.08 0.08 1 1.5 0 0.75 0 0 0 0 0 1 1\n";
+    }
+    Game v13_bounce_loaded;
+    load_settings(v13_bounce_loaded);
+    ok = self_test_check(v13_bounce_loaded.wall_settings.bounce && std::fabs(v13_bounce_loaded.wall_settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(v13_bounce_loaded.wall_settings.wall_distance_max - 10.0f) < 0.0001f, "v13 bounce 180 half-width range migrates to 8-10m") && ok;
+    ok = self_test_check(v13_bounce_loaded.wall_settings.target_count_min == 4 && v13_bounce_loaded.wall_settings.target_count_max == 4, "v13 bounce 180 one-target preset migrates to four balls") && ok;
+
+    {
+        std::ofstream v14_bounce("build/self-test-settings.cfg");
+        v14_bounce << "version 14\n";
+        v14_bounce << "selected_wall 0\n";
+        v14_bounce << "wall_preset \"THE BOUNCE 180\" 1 1 8 10 0.08 0.08 1 1.5 0 0.75 0 0 0 0 0 1 1\n";
+    }
+    Game v14_bounce_loaded;
+    load_settings(v14_bounce_loaded);
+    ok = self_test_check(v14_bounce_loaded.wall_settings.bounce && v14_bounce_loaded.wall_settings.target_count_min == 4, "v14 bounce 180 one-target preset migrates to four balls") && ok;
+    ok = self_test_check(std::fabs(v14_bounce_loaded.wall_settings.bounce_angle_min - BOUNCE_ANGLE_MIN_DEG) < 0.0001f && std::fabs(v14_bounce_loaded.wall_settings.bounce_speed_max - BOUNCE_SPEED_MAX_M) < 0.0001f && std::fabs(v14_bounce_loaded.wall_settings.bounce_camera_height_m - BOUNCE_CAMERA_HEIGHT_M) < 0.0001f && std::fabs(v14_bounce_loaded.wall_settings.bounce_gravity_m - BOUNCE_GRAVITY_LEGACY_M) < 0.0001f, "pre-v16 bounce presets load default jump angle, speed, camera height, and legacy gravity") && ok;
+
+    {
+        std::ofstream v16_bounce("build/self-test-settings.cfg");
+        v16_bounce << "version 16\n";
+        v16_bounce << "selected_wall 0\n";
+        v16_bounce << "wall_preset \"THE BOUNCE 180\" 4 4 8 10 0.08 0.08 1 1.5 0 0.75 0 0 0 0 0 1 1 30 75 4 6 0.5\n";
+    }
+    Game v16_bounce_loaded;
+    load_settings(v16_bounce_loaded);
+    ok = self_test_check(v16_bounce_loaded.wall_settings.bounce && std::fabs(v16_bounce_loaded.wall_settings.bounce_camera_height_m - 0.5f) < 0.0001f && std::fabs(v16_bounce_loaded.wall_settings.bounce_gravity_m - BOUNCE_GRAVITY_LEGACY_M) < 0.0001f, "v16 bounce presets without gravity load 9.81 m/s2") && ok;
+    ok = self_test_check(std::fabs(v16_bounce_loaded.wall_settings.bounce_dir_change_p - 0.0f) < 0.0001f, "v16 bounce presets without dir-change probability load 0") && ok;
+
+    {
+        std::ofstream v17_bounce("build/self-test-settings.cfg");
+        v17_bounce << "version 17\n";
+        v17_bounce << "selected_wall 0\n";
+        v17_bounce << "wall_preset \"THE BOUNCE 180\" 4 4 8 10 0.08 0.08 1 1.5 0 0.75 0 0 0 0 0 1 1 30 75 4 6 0.25 6\n";
+    }
+    Game v17_bounce_loaded;
+    load_settings(v17_bounce_loaded);
+    ok = self_test_check(v17_bounce_loaded.wall_settings.bounce && std::fabs(v17_bounce_loaded.wall_settings.bounce_gravity_m - 6.0f) < 0.0001f && std::fabs(v17_bounce_loaded.wall_settings.bounce_dir_change_p - 0.0f) < 0.0001f, "v17 bounce presets without dir-change probability load 0") && ok;
 
     {
         Game playlist_save;
@@ -1134,6 +1237,336 @@ int run_self_test() {
         center_stable = center_stable && std::fabs(target.distance - center_distance) < 0.001f && std::fabs(target.pos.x - expected_x) < 0.001f && std::fabs(target.pos.y - expected_y) < 0.001f;
     }
     ok = self_test_check(center_stable, "single infinite tracking target spawns at the center of the spawn rectangle") && ok;
+
+    Game bounce;
+    bounce.rng.seed(180);
+    bounce.wall_settings.bounce = true;
+    bounce.wall_settings.task_mode = TaskMode::Clicking;
+    bounce.wall_settings.target_health = 1;
+    bounce.wall_settings.target_count_min = 1;
+    bounce.wall_settings.target_count_max = 1;
+    bounce.wall_settings.radius_min = 0.08f;
+    bounce.wall_settings.radius_max = 0.08f;
+    bounce.wall_settings.horizontal_speed_min = 1.0f;
+    bounce.wall_settings.horizontal_speed_max = 1.5f;
+    bounce.wall_settings.vertical_speed_min = 0.0f;
+    bounce.wall_settings.vertical_speed_max = 0.75f;
+    bounce.wall_settings.wall_distance_min = 8.0f;
+    bounce.wall_settings.wall_distance_max = 10.0f;
+    bounce.wall_settings.bounce_speed_min = 5.5f;
+    bounce.wall_settings.bounce_speed_max = 5.5f;
+    bounce.wall_settings.bounce_angle_min = 32.0f;
+    bounce.wall_settings.bounce_angle_max = 62.0f;
+    bounce.wall_settings.bounce_camera_height_m = BOUNCE_CAMERA_HEIGHT_M;
+    normalize_settings(bounce);
+    Vec3 bounce_eye = camera_pos(bounce);
+    ok = self_test_check(bounce_eye.y < ROOM_EYE_HEIGHT - 0.5f, "bounce 180 camera sits lower than the wall-task eye height") && ok;
+    Game bounce_cam = bounce;
+    bounce_cam.wall_settings.bounce_camera_height_m = 2.0f;
+    normalize_settings(bounce_cam);
+    ok = self_test_check(std::fabs(units_to_wall_meters(camera_pos(bounce_cam).y) - 2.0f) < 0.05f, "bounce 180 camera height setting moves the eye") && ok;
+    WallClickSettings jump_settings = bounce.wall_settings;
+    jump_settings.bounce_speed_max = 10.0f;
+    jump_settings.bounce_angle_max = 90.0f;
+    ok = self_test_check(std::fabs(bounce_max_jump_height_m(jump_settings) - (10.0f * 10.0f) / (2.0f * BOUNCE_GRAVITY_M)) < 0.001f, "bounce 180 max jump height is computed from max speed, max angle, and gravity") && ok;
+    float left_dist = bounce_half_extent(bounce);
+    float right_dist = bounce_half_extent(bounce);
+    float front_dist = bounce_eye.z - bounce_front_z(bounce);
+    ok = self_test_check(std::fabs(left_dist - right_dist) < 0.001f && std::fabs(left_dist - front_dist) < 0.001f, "bounce 180 keeps equal distance to the left, right, and front walls") && ok;
+    ok = self_test_check(std::fabs(room_play_width(bounce) - 2.0f * bounce_half_extent(bounce)) < 0.001f, "bounce 180 room width matches twice the far-wall half-extent") && ok;
+    ok = self_test_check(std::fabs(bounce_half_extent(bounce) - (wall_to_units(10.0f) + wall_to_units(0.08f))) < 0.001f, "bounce 180 walls sit a ball-radius outside the far spawn cylinder") && ok;
+    {
+        Vec3 front_touch{};
+        bounce_place_on_cylinder(front_touch, bounce_cylinder_radius(10.0f), 0.0f);
+        float front_radius = wall_to_units(0.08f);
+        ok = self_test_check(std::fabs((front_touch.z - front_radius) - bounce_front_z(bounce)) < 0.001f, "bounce 180 far-spawn ball at the front of its arc touches the front wall") && ok;
+        ok = self_test_check(front_touch.z - front_radius >= bounce_front_z(bounce) - 0.0001f, "bounce 180 far-spawn ball does not clip into the front wall") && ok;
+    }
+
+    init_scenarios(bounce);
+    start_scenario(bounce, bounce.scenarios[0]);
+    ok = self_test_check(bounce.targets.size() == 1, "bounce 180 can start with one target when configured") && ok;
+    float bmin_x, bmax_x, bmin_y, bmax_y, bmin_z, bmax_z;
+    bounce_target_bounds(bounce, bounce.targets[0].radius, bmin_x, bmax_x, bmin_y, bmax_y, bmin_z, bmax_z);
+    ok = self_test_check(bounce.targets[0].pos.x >= bmin_x - 0.001f && bounce.targets[0].pos.x <= bmax_x + 0.001f && bounce.targets[0].pos.y >= bmin_y - 0.001f && bounce.targets[0].pos.y <= bmax_y + 0.001f && bounce.targets[0].pos.z >= bmin_z - 0.001f && bounce.targets[0].pos.z <= bmax_z + 0.001f, "bounce 180 spawn stays inside the 3D room bounds") && ok;
+    ok = self_test_check(std::fabs(bounce.targets[0].pos.y - bounce.targets[0].radius) < 0.001f, "bounce 180 spawns on the floor at the bottom of its trajectory") && ok;
+    ok = self_test_check(std::fabs(bounce.targets[0].vel.x) > 0.0001f || std::fabs(bounce.targets[0].vel.z) > 0.0001f, "bounce 180 spawn has horizontal travel") && ok;
+    ok = self_test_check(bounce.targets[0].vel.y > 0.0001f, "bounce 180 spawn takes off upward immediately") && ok;
+    float spawn_range = std::hypot(bounce.targets[0].pos.x - bounce_eye.x, bounce.targets[0].pos.z - bounce_eye.z);
+    ok = self_test_check(std::fabs(spawn_range - bounce_cylinder_radius(bounce.targets[0].distance)) < 0.05f, "bounce 180 spawn sits on a cylinder around the player") && ok;
+    ok = self_test_check(bounce.targets[0].distance + 0.0001f >= bounce.wall_settings.wall_distance_min && bounce.targets[0].distance - 0.0001f <= bounce.wall_settings.wall_distance_max, "bounce 180 spawn radius comes from the Wall min/max range") && ok;
+    Game bounce_grav = bounce;
+    bounce_grav.targets[0].pos.y = bounce.targets[0].radius + wall_to_units(0.5f);
+    bounce_grav.wall_settings.acceleration_min = 40.0f;
+    bounce_grav.wall_settings.acceleration_max = 40.0f;
+    float vy0 = bounce_grav.targets[0].vel.y;
+    update_wall_targets(bounce_grav, 1.0f / 60.0f);
+    ok = self_test_check(std::fabs((vy0 - bounce_grav.targets[0].vel.y) - wall_to_units(BOUNCE_GRAVITY_M) / 60.0f) < 0.08f, "bounce 180 vertical acceleration is gravity only") && ok;
+    Game bounce_heavy = bounce;
+    bounce_heavy.targets[0].pos.y = bounce.targets[0].radius + wall_to_units(0.5f);
+    bounce_heavy.wall_settings.bounce_gravity_m = 19.62f;
+    float heavy_vy0 = bounce_heavy.targets[0].vel.y;
+    update_wall_targets(bounce_heavy, 1.0f / 60.0f);
+    ok = self_test_check(std::fabs((heavy_vy0 - bounce_heavy.targets[0].vel.y) - wall_to_units(19.62f) / 60.0f) < 0.08f, "bounce 180 gravity setting scales downward acceleration") && ok;
+
+    Game bounce_four = bounce;
+    bounce_four.rng.seed(184);
+    bounce_four.wall_settings.target_count_min = 4;
+    bounce_four.wall_settings.target_count_max = 4;
+    normalize_settings(bounce_four);
+    start_scenario(bounce_four, bounce_four.scenarios[0]);
+    ok = self_test_check(bounce_four.targets.size() == 4, "bounce 180 default-style run starts with four balls") && ok;
+    bool four_on_cylinders = true;
+    float four_ke_min = 1.0e9f;
+    float four_ke_max = 0.0f;
+    for (const Target& ball : bounce_four.targets) {
+        float range = std::hypot(ball.pos.x - bounce_eye.x, ball.pos.z - bounce_eye.z);
+        four_on_cylinders = four_on_cylinders && std::fabs(ball.pos.y - ball.radius) < 0.05f && std::fabs(range - bounce_cylinder_radius(ball.distance)) < 0.05f && ball.distance + 0.0001f >= bounce_four.wall_settings.wall_distance_min && ball.distance - 0.0001f <= bounce_four.wall_settings.wall_distance_max;
+        float ke = 0.5f * (ball.vel.x * ball.vel.x + ball.vel.y * ball.vel.y + ball.vel.z * ball.vel.z);
+        four_ke_min = std::min(four_ke_min, ke);
+        four_ke_max = std::max(four_ke_max, ke);
+    }
+    ok = self_test_check(four_on_cylinders, "bounce 180 four-ball spawn keeps every ball on its floor cylinder") && ok;
+    ok = self_test_check(four_ke_min > 0.0f && four_ke_max / four_ke_min < 1.05f, "bounce 180 four-ball spawn keeps similar takeoff energy when speed is fixed") && ok;
+
+    float ke_min = 1.0e9f;
+    float ke_max = 0.0f;
+    bool spawn_radii_in_range = true;
+    for (int i = 0; i < 24; ++i) {
+        Game energy;
+        energy.rng.seed(1900 + i);
+        energy.wall_settings = bounce.wall_settings;
+        Target takeoff = spawn_wall_target(energy);
+        float ke = 0.5f * (takeoff.vel.x * takeoff.vel.x + takeoff.vel.y * takeoff.vel.y + takeoff.vel.z * takeoff.vel.z);
+        ke_min = std::min(ke_min, ke);
+        ke_max = std::max(ke_max, ke);
+        spawn_radii_in_range = spawn_radii_in_range && takeoff.distance + 0.0001f >= 8.0f && takeoff.distance - 0.0001f <= 10.0f;
+    }
+    ok = self_test_check(ke_min > 0.0f && ke_max / ke_min < 1.05f, "bounce 180 takeoff kinetic energy stays similar when speed is fixed") && ok;
+    ok = self_test_check(spawn_radii_in_range, "bounce 180 Wall 8-10m range is the allowed spawn radius") && ok;
+
+    Game bounce_launch = bounce;
+    bounce_launch.wall_settings.bounce_speed_min = 3.0f;
+    bounce_launch.wall_settings.bounce_speed_max = 7.0f;
+    bounce_launch.wall_settings.bounce_angle_min = 20.0f;
+    bounce_launch.wall_settings.bounce_angle_max = 50.0f;
+    normalize_settings(bounce_launch);
+    bool launch_in_range = true;
+    for (int i = 0; i < 24; ++i) {
+        Game sample;
+        sample.rng.seed(2100 + i);
+        sample.wall_settings = bounce_launch.wall_settings;
+        Target takeoff = spawn_wall_target(sample);
+        float speed_m = units_to_wall_meters(std::sqrt(
+            takeoff.vel.x * takeoff.vel.x + takeoff.vel.y * takeoff.vel.y + takeoff.vel.z * takeoff.vel.z));
+        float horiz = std::hypot(takeoff.vel.x, takeoff.vel.z);
+        float angle = rad_to_deg(std::atan2(takeoff.vel.y, horiz));
+        launch_in_range = launch_in_range && speed_m + 0.05f >= 3.0f && speed_m - 0.05f <= 7.0f &&
+            angle + 0.5f >= 20.0f && angle - 0.5f <= 50.0f;
+    }
+    ok = self_test_check(launch_in_range, "bounce 180 samples takeoff speed and jump angle from their configured ranges") && ok;
+
+    Game bounce_close = bounce;
+    bounce_close.rng.seed(191);
+    bounce_close.wall_settings.wall_distance_min = 4.0f;
+    bounce_close.wall_settings.wall_distance_max = 5.0f;
+    normalize_settings(bounce_close);
+    bool close_radii_in_range = true;
+    for (int i = 0; i < 16; ++i) {
+        Target takeoff = spawn_wall_target(bounce_close);
+        close_radii_in_range = close_radii_in_range && takeoff.distance + 0.0001f >= 4.0f && takeoff.distance - 0.0001f <= 5.0f;
+    }
+    ok = self_test_check(close_radii_in_range, "bounce 180 Wall min/max controls the allowed spawn radiuses") && ok;
+
+    Game bounce_spawn_hop = bounce;
+    bounce_spawn_hop.targets[0].distance = 9.0f;
+    float hop_r = bounce_cylinder_radius(bounce_spawn_hop.targets[0].distance);
+    bounce_place_on_cylinder(bounce_spawn_hop.targets[0].pos, hop_r, 0.0f);
+    bounce_spawn_hop.targets[0].pos.y = bmin_y;
+    bounce_spawn_hop.targets[0].desired_vel.x = 0.15f;
+    bounce_spawn_hop.targets[0].vel.y = std::fabs(bounce_spawn_hop.targets[0].desired_vel.y);
+    bounce_spawn_hop.targets[0].vel.x = 0.15f * hop_r;
+    bounce_spawn_hop.targets[0].vel.z = 0.0f;
+    float spawn_hop_peak = bounce_spawn_hop.targets[0].pos.y;
+    bool spawn_hit_ceiling = false;
+    float hop_omega = bounce_spawn_hop.targets[0].desired_vel.x;
+    bool omega_stable = true;
+    bool radius_stable = true;
+    for (int i = 0; i < 180; ++i) {
+        update_wall_targets(bounce_spawn_hop, 1.0f / 60.0f);
+        spawn_hop_peak = std::max(spawn_hop_peak, bounce_spawn_hop.targets[0].pos.y);
+        if (bounce_spawn_hop.targets[0].pos.y >= bmax_y - 0.02f) {
+            spawn_hit_ceiling = true;
+        }
+        float range = std::hypot(bounce_spawn_hop.targets[0].pos.x - bounce_eye.x, bounce_spawn_hop.targets[0].pos.z - bounce_eye.z);
+        if (std::fabs(range - hop_r) > 0.05f) {
+            radius_stable = false;
+        }
+        if (bounce_spawn_hop.targets[0].pos.y > bmin_y + 0.05f &&
+            std::fabs(std::fabs(bounce_arc_theta(bounce_spawn_hop.targets[0].pos)) - bounce_theta_limit(bounce_spawn_hop, hop_r, bounce_spawn_hop.targets[0].radius)) > 0.05f &&
+            std::fabs(bounce_spawn_hop.targets[0].desired_vel.x - hop_omega) > 0.0001f) {
+            omega_stable = false;
+        }
+    }
+    ok = self_test_check(!spawn_hit_ceiling && spawn_hop_peak < ROOM_HEIGHT - bounce_spawn_hop.targets[0].radius + 0.05f, "bounce 180 first hop from a floor spawn cannot reach the ceiling") && ok;
+    ok = self_test_check(omega_stable, "bounce 180 keeps its takeoff heading while airborne away from the back wall") && ok;
+    ok = self_test_check(radius_stable, "bounce 180 keeps a fixed cylinder radius for each ball") && ok;
+
+    int steep_takeoffs = 0;
+    int shallow_takeoffs = 0;
+    for (int i = 0; i < 40; ++i) {
+        Game angled;
+        angled.rng.seed(1800 + i);
+        angled.wall_settings = bounce.wall_settings;
+        Target takeoff = spawn_wall_target(angled);
+        float vh = std::hypot(takeoff.vel.x, takeoff.vel.z);
+        if (vh > takeoff.vel.y) {
+            shallow_takeoffs += 1;
+        }
+        if (takeoff.vel.y > vh) {
+            steep_takeoffs += 1;
+        }
+    }
+    ok = self_test_check(steep_takeoffs > 0 && shallow_takeoffs > 0, "bounce 180 takeoff angles mix steep vertical hops with flatter horizontal travel") && ok;
+
+    Game bounce_fall = bounce;
+    bounce_fall.targets[0].distance = 9.0f;
+    float fall_r = bounce_cylinder_radius(bounce_fall.targets[0].distance);
+    bounce_place_on_cylinder(bounce_fall.targets[0].pos, fall_r, 0.0f);
+    bounce_fall.targets[0].pos.y = (bmin_y + bmax_y) * 0.5f;
+    bounce_fall.targets[0].vel = {0.0f, 0.0f, 0.0f};
+    bounce_fall.targets[0].desired_vel = {0.0f, 0.0f, 0.0f};
+    float y_before = bounce_fall.targets[0].pos.y;
+    float vy_before = bounce_fall.targets[0].vel.y;
+    update_wall_targets(bounce_fall, 1.0f / 60.0f);
+    ok = self_test_check(bounce_fall.targets[0].vel.y < vy_before && bounce_fall.targets[0].pos.y < y_before, "bounce 180 applies gravity so vertical motion is parabolic") && ok;
+
+    float hop_launch = wall_to_units(3.5f);
+    Game bounce_floor = bounce;
+    bounce_floor.targets[0].distance = 9.0f;
+    float floor_r = bounce_cylinder_radius(bounce_floor.targets[0].distance);
+    bounce_place_on_cylinder(bounce_floor.targets[0].pos, floor_r, 0.0f);
+    bounce_floor.targets[0].pos.y = bounce_floor.targets[0].radius + 0.0002f;
+    bounce_floor.targets[0].vel = {0.0f, -wall_to_units(4.0f), 0.0f};
+    bounce_floor.targets[0].desired_vel = {0.4f, hop_launch, 0.0f};
+    float floor_omega = bounce_floor.targets[0].desired_vel.x;
+    update_wall_targets(bounce_floor, 1.0f / 1000.0f);
+    ok = self_test_check(bounce_floor.targets[0].pos.y >= bounce_floor.targets[0].radius - 0.0001f && bounce_floor.targets[0].vel.y > 0.0f, "bounce 180 floor contact reflects into an upward bounce") && ok;
+    ok = self_test_check(std::fabs(bounce_floor.targets[0].pos.y - bounce_floor.targets[0].radius) < 0.001f, "bounce 180 floor bounce places the sphere on the floor without clipping") && ok;
+    ok = self_test_check(std::fabs(bounce_floor.targets[0].desired_vel.x - floor_omega) < 0.0001f, "bounce 180 floor hop keeps its heading on the cylinder") && ok;
+
+    Game bounce_dir = bounce;
+    bounce_dir.wall_settings.bounce_dir_change_p = 1.0f;
+    bounce_dir.targets[0].distance = 9.0f;
+    float dir_r = bounce_cylinder_radius(bounce_dir.targets[0].distance);
+    bounce_place_on_cylinder(bounce_dir.targets[0].pos, dir_r, 0.0f);
+    bounce_dir.targets[0].pos.y = bounce_dir.targets[0].radius + 0.0002f;
+    bounce_dir.targets[0].vel = {0.0f, -wall_to_units(4.0f), 0.0f};
+    bounce_dir.targets[0].desired_vel = {0.4f, hop_launch, 0.0f};
+    update_wall_targets(bounce_dir, 1.0f / 1000.0f);
+    ok = self_test_check(bounce_dir.targets[0].vel.y > 0.0f && std::fabs(bounce_dir.targets[0].desired_vel.x + 0.4f) < 0.0001f, "bounce 180 floor dir-change reverses heading in the same frame as the vertical bounce") && ok;
+
+    Game bounce_air = bounce;
+    bounce_air.wall_settings.bounce_dir_change_p = 1.0f;
+    bounce_air.targets[0].distance = 9.0f;
+    float air_r = bounce_cylinder_radius(bounce_air.targets[0].distance);
+    bounce_place_on_cylinder(bounce_air.targets[0].pos, air_r, 0.0f);
+    bounce_air.targets[0].pos.y = bounce_air.targets[0].radius + wall_to_units(1.5f);
+    bounce_air.targets[0].vel = {0.0f, -wall_to_units(1.0f), 0.0f};
+    bounce_air.targets[0].desired_vel = {0.4f, hop_launch, 0.0f};
+    bool air_heading_stable = true;
+    for (int i = 0; i < 12; ++i) {
+        update_wall_targets(bounce_air, 1.0f / 60.0f);
+        if (bounce_air.targets[0].pos.y <= bounce_air.targets[0].radius + 0.02f) {
+            break;
+        }
+        air_heading_stable = air_heading_stable && std::fabs(bounce_air.targets[0].desired_vel.x - 0.4f) < 0.0001f;
+    }
+    ok = self_test_check(air_heading_stable && bounce_air.targets[0].pos.y > bounce_air.targets[0].radius + 0.02f, "bounce 180 dir-change probability never reverses heading in mid-air") && ok;
+    float bounce_peak = bounce_floor.targets[0].pos.y;
+    bool hit_ceiling = false;
+    for (int i = 0; i < 180; ++i) {
+        update_wall_targets(bounce_floor, 1.0f / 60.0f);
+        bounce_peak = std::max(bounce_peak, bounce_floor.targets[0].pos.y);
+        if (bounce_floor.targets[0].pos.y >= bmax_y - 0.02f) {
+            hit_ceiling = true;
+        }
+    }
+    ok = self_test_check(!hit_ceiling && bounce_peak < ROOM_HEIGHT - bounce_floor.targets[0].radius + 0.05f, "bounce 180 floor hop cannot reach the ceiling") && ok;
+
+    Game bounce_back = bounce;
+    bounce_back.targets[0].distance = 9.0f;
+    float back_r = bounce_cylinder_radius(bounce_back.targets[0].distance);
+    float old_side_clip = std::acos(clampf(bounce_back.targets[0].radius / std::max(back_r, 0.001f), 0.0f, 1.0f));
+    float back_limit = bounce_theta_limit(bounce_back, back_r, bounce_back.targets[0].radius);
+    ok = self_test_check(back_limit > old_side_clip + 0.05f, "bounce 180 back-wall limit is past the old 90-degree side clip") && ok;
+    bounce_place_on_cylinder(bounce_back.targets[0].pos, back_r, old_side_clip);
+    bounce_back.targets[0].pos.y = (bmin_y + bmax_y) * 0.5f;
+    bounce_back.targets[0].desired_vel = {0.8f, hop_launch, 0.0f};
+    bounce_back.targets[0].vel = {0.0f, 0.0f, 0.0f};
+    float z_before_clip = bounce_back.targets[0].pos.z;
+    update_wall_targets(bounce_back, 1.0f / 30.0f);
+    ok = self_test_check(bounce_back.targets[0].desired_vel.x > 0.0f && bounce_back.targets[0].pos.z > z_before_clip, "bounce 180 does not reverse at the invisible 90-degree side plane") && ok;
+    bounce_place_on_cylinder(bounce_back.targets[0].pos, back_r, back_limit);
+    bounce_back.targets[0].pos.y = (bmin_y + bmax_y) * 0.5f;
+    bounce_back.targets[0].desired_vel = {0.8f, hop_launch, 0.0f};
+    bounce_back.targets[0].vel = {0.0f, 0.0f, 0.0f};
+    ok = self_test_check(std::fabs(bounce_back.targets[0].pos.z - (bounce_back_z(bounce_back) - bounce_back.targets[0].radius)) < 0.001f, "bounce 180 reverse sits on the visible back wall") && ok;
+    update_wall_targets(bounce_back, 1.0f / 30.0f);
+    ok = self_test_check(bounce_back.targets[0].desired_vel.x < 0.0f, "bounce 180 reflects off the back wall immediately, including in mid-air") && ok;
+    float back_range = std::hypot(bounce_back.targets[0].pos.x - bounce_eye.x, bounce_back.targets[0].pos.z - bounce_eye.z);
+    ok = self_test_check(std::fabs(back_range - back_r) < 0.05f, "bounce 180 back-wall bounce keeps the ball on its cylinder") && ok;
+
+    Game bounce_around = bounce;
+    bounce_around.targets.clear();
+    Target around = spawn_wall_target(bounce_around);
+    around.distance = 9.0f;
+    float around_r = bounce_cylinder_radius(around.distance);
+    bounce_place_on_cylinder(around.pos, around_r, 0.0f);
+    around.pos.y = bmin_y;
+    around.desired_vel = {0.7f, hop_launch, 0.0f};
+    around.vel = {0.0f, hop_launch, 0.0f};
+    bounce_around.targets.push_back(around);
+    bool saw_left = false;
+    bool saw_right = false;
+    bool saw_back = false;
+    bool went_behind = false;
+    bool stayed_on_cylinder = true;
+    bool stayed_inside = true;
+    bool no_clip = true;
+    for (int i = 0; i < 1200; ++i) {
+        update_wall_targets(bounce_around, 1.0f / 60.0f);
+        const Target& ball = bounce_around.targets[0];
+        float range = std::hypot(ball.pos.x - bounce_eye.x, ball.pos.z - bounce_eye.z);
+        stayed_on_cylinder = stayed_on_cylinder && std::fabs(range - around_r) < 0.05f;
+        stayed_inside = stayed_inside && ball.pos.x >= bmin_x - 0.05f && ball.pos.x <= bmax_x + 0.05f && ball.pos.y >= bmin_y - 0.05f && ball.pos.y <= bmax_y + 0.05f && ball.pos.z >= bmin_z - 0.05f && ball.pos.z <= bmax_z + 0.05f;
+        if (ball.pos.x < -wall_to_units(1.0f)) {
+            saw_left = true;
+        }
+        if (ball.pos.x > wall_to_units(1.0f)) {
+            saw_right = true;
+        }
+        if (ball.pos.z > bounce_eye.z) {
+            went_behind = true;
+        }
+        if (ball.pos.z > bounce_back_z(bounce_around) - ball.radius - wall_to_units(0.4f)) {
+            saw_back = true;
+        }
+        if (ball.pos.y < ball.radius - 0.0001f ||
+            ball.pos.y + ball.radius > ROOM_HEIGHT + 0.0001f ||
+            ball.pos.z + ball.radius > bounce_back_z(bounce_around) + 0.0001f ||
+            ball.pos.z - ball.radius < bounce_front_z(bounce_around) - 0.0001f ||
+            std::fabs(ball.pos.x) + ball.radius > bounce_half_extent(bounce_around) + 0.0001f ||
+            std::fabs(bounce_arc_theta(ball.pos)) > bounce_theta_limit(bounce_around, around_r, ball.radius) + 0.0001f) {
+            no_clip = false;
+        }
+    }
+    ok = self_test_check(stayed_inside, "bounce 180 ball stays in the room while bouncing") && ok;
+    ok = self_test_check(stayed_on_cylinder, "bounce 180 ball never changes its cylinder radius while bouncing") && ok;
+    ok = self_test_check(no_clip, "bounce 180 sphere never clips through the floor or back wall") && ok;
+    ok = self_test_check(saw_left && saw_right, "bounce 180 ball travels around the player toward both sides") && ok;
+    ok = self_test_check(went_behind, "bounce 180 ball travels past the camera to the back wall") && ok;
+    ok = self_test_check(saw_back, "bounce 180 ball reaches the back wall on its cylinder") && ok;
 
     Game switch_spawn = center_spawn;
     switch_spawn.rng.seed(617);

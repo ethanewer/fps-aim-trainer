@@ -84,13 +84,20 @@ std::string filter_preset_name_draft(const std::string& raw) {
 static void normalize_wall_settings(Game& game, WallClickSettings& settings) {
     normalize_float_range(settings.wall_distance_min, settings.wall_distance_max, 2.0f, 30.0f);
     normalize_float_range(settings.radius_min, settings.radius_max, WALL_TARGET_RADIUS_MIN_M, WALL_TARGET_RADIUS_MAX_M);
-    int capacity = wall_capacity_for_radius(settings.radius_max, settings.wall_distance_max);
+    int capacity = is_bounce(settings)
+        ? bounce_capacity_for_radius(settings.radius_max, settings.wall_distance_max)
+        : wall_capacity_for_radius(settings.radius_max, settings.wall_distance_max);
     settings.target_count_min = std::max(1, std::min(settings.target_count_min, capacity));
     settings.target_count_max = settings.target_count_min;
     normalize_float_range(settings.horizontal_speed_min, settings.horizontal_speed_max, 0.0f, 8.0f);
     normalize_float_range(settings.vertical_speed_min, settings.vertical_speed_max, 0.0f, 8.0f);
     normalize_float_range(settings.acceleration_min, settings.acceleration_max, 0.0f, 40.0f);
     normalize_float_range(settings.change_min, settings.change_max, 0.0f, 12.0f);
+    normalize_float_range(settings.bounce_angle_min, settings.bounce_angle_max, 0.0f, 85.0f);
+    normalize_float_range(settings.bounce_speed_min, settings.bounce_speed_max, 0.0f, 20.0f);
+    settings.bounce_camera_height_m = clampf(settings.bounce_camera_height_m, BOUNCE_CAMERA_HEIGHT_MIN_M, 3.2f);
+    settings.bounce_gravity_m = clampf(settings.bounce_gravity_m, 0.1f, 40.0f);
+    settings.bounce_dir_change_p = clampf(settings.bounce_dir_change_p, 0.0f, 1.0f);
     settings.target_health = std::max(0, std::min(settings.target_health, WALL_TARGET_HEALTH_MAX));
     if (settings.task_mode != TaskMode::Tracking) {
         settings.task_mode = TaskMode::Clicking;
@@ -137,6 +144,14 @@ static WallClickSettings settings_from_def(const DefaultTaskDef& def) {
     settings.acceleration_max = def.accel_max;
     settings.change_min = def.change_min;
     settings.change_max = def.change_max;
+    settings.bounce = def.bounce != 0;
+    settings.bounce_angle_min = def.bounce_angle_min;
+    settings.bounce_angle_max = def.bounce_angle_max;
+    settings.bounce_speed_min = def.bounce_speed_min;
+    settings.bounce_speed_max = def.bounce_speed_max;
+    settings.bounce_camera_height_m = def.bounce_camera;
+    settings.bounce_gravity_m = def.bounce_gravity;
+    settings.bounce_dir_change_p = def.bounce_dir_change;
     return settings;
 }
 
@@ -524,6 +539,24 @@ static std::vector<WallPreset> parse_default_task_dump(const std::string& text) 
         preset.settings.change_max = values[13];
         preset.settings.task_mode = static_cast<int>(std::round(values[14])) == 1 ? TaskMode::Tracking : TaskMode::Clicking;
         preset.settings.target_health = static_cast<int>(std::round(values[15]));
+        if (values.size() >= 17) {
+            preset.settings.bounce = static_cast<int>(std::round(values[16])) == 1;
+        }
+        if (values.size() >= 22) {
+            preset.settings.bounce_angle_min = values[17];
+            preset.settings.bounce_angle_max = values[18];
+            preset.settings.bounce_speed_min = values[19];
+            preset.settings.bounce_speed_max = values[20];
+            preset.settings.bounce_camera_height_m = values[21];
+        }
+        if (values.size() >= 23) {
+            preset.settings.bounce_gravity_m = values[22];
+        } else if (values.size() >= 17) {
+            preset.settings.bounce_gravity_m = BOUNCE_GRAVITY_LEGACY_M;
+        }
+        if (values.size() >= 24) {
+            preset.settings.bounce_dir_change_p = values[23];
+        }
         presets.push_back(preset);
     }
     return presets;
@@ -687,7 +720,7 @@ void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 12\n";
+    out << "version 18\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " "
         << normalized.crosshair.thickness << " "
@@ -715,7 +748,15 @@ void save_settings(const Game& game) {
             << preset.settings.change_min << " "
             << preset.settings.change_max << " "
             << (preset.settings.task_mode == TaskMode::Tracking ? 1 : 0) << " "
-            << preset.settings.target_health << "\n";
+            << preset.settings.target_health << " "
+            << (preset.settings.bounce ? 1 : 0) << " "
+            << preset.settings.bounce_angle_min << " "
+            << preset.settings.bounce_angle_max << " "
+            << preset.settings.bounce_speed_min << " "
+            << preset.settings.bounce_speed_max << " "
+            << preset.settings.bounce_camera_height_m << " "
+            << preset.settings.bounce_gravity_m << " "
+            << preset.settings.bounce_dir_change_p << "\n";
     }
     for (const Playlist& playlist : normalized.playlists) {
         out << "playlist " << std::quoted(playlist.name);
@@ -818,6 +859,24 @@ void load_settings(Game& game) {
                 if (values.size() >= 16) {
                     preset.settings.task_mode = static_cast<int>(std::round(values[14])) == 1 ? TaskMode::Tracking : TaskMode::Clicking;
                     preset.settings.target_health = static_cast<int>(std::round(values[15]));
+                }
+                if (values.size() >= 17) {
+                    preset.settings.bounce = static_cast<int>(std::round(values[16])) == 1;
+                }
+                if (values.size() >= 22) {
+                    preset.settings.bounce_angle_min = values[17];
+                    preset.settings.bounce_angle_max = values[18];
+                    preset.settings.bounce_speed_min = values[19];
+                    preset.settings.bounce_speed_max = values[20];
+                    preset.settings.bounce_camera_height_m = values[21];
+                }
+                if (values.size() >= 23) {
+                    preset.settings.bounce_gravity_m = values[22];
+                } else if (values.size() >= 17) {
+                    preset.settings.bounce_gravity_m = BOUNCE_GRAVITY_LEGACY_M;
+                }
+                if (values.size() >= 24) {
+                    preset.settings.bounce_dir_change_p = values[23];
                 }
             } else if (values.size() >= 13) {
                 // v4: a single wall distance -> migrate to a min==max range.
@@ -945,6 +1004,40 @@ void load_settings(Game& game) {
         migrate_builtin_wall(game.wall_preset_name, game.wall_settings);
         for (WallPreset& preset : game.wall_presets) {
             migrate_builtin_wall(preset.name, preset.settings);
+        }
+    }
+    // v13 Bounce 180 used the old room half-width (~3.56m). Move it to the same
+    // 8-10m range as 1W2T DYNAMIC so the ball stays at a similar distance.
+    if (settings_version < 14) {
+        auto migrate_bounce_range = [](const std::string& name, WallClickSettings& settings) {
+            if (name != "THE BOUNCE 180") {
+                return;
+            }
+            float old_even = bounce_equal_wall_distance_m();
+            if (std::fabs(settings.wall_distance_min - old_even) < 0.05f &&
+                std::fabs(settings.wall_distance_max - old_even) < 0.05f) {
+                settings.wall_distance_min = 8.0f;
+                settings.wall_distance_max = 10.0f;
+            }
+        };
+        migrate_bounce_range(game.wall_preset_name, game.wall_settings);
+        for (WallPreset& preset : game.wall_presets) {
+            migrate_bounce_range(preset.name, preset.settings);
+        }
+    }
+    if (settings_version < 15) {
+        auto migrate_bounce_count = [](const std::string& name, WallClickSettings& settings) {
+            if (name != "THE BOUNCE 180" || !settings.bounce) {
+                return;
+            }
+            if (settings.target_count_min == 1 && settings.target_count_max == 1) {
+                settings.target_count_min = BOUNCE_DEFAULT_TARGETS;
+                settings.target_count_max = BOUNCE_DEFAULT_TARGETS;
+            }
+        };
+        migrate_bounce_count(game.wall_preset_name, game.wall_settings);
+        for (WallPreset& preset : game.wall_presets) {
+            migrate_bounce_count(preset.name, preset.settings);
         }
     }
     apply_selected_presets(game);

@@ -40,7 +40,104 @@ static bool uses_center_wall_spawn(const Game& game) {
     return is_tracking(game.wall_settings.task_mode) && game.wall_settings.target_health <= 0 && game.wall_settings.target_count_min == 1;
 }
 
+static void bounce_sample_takeoff(Game& game, float r, float& omega, float& launch_y) {
+    float speed_m = rand_wall_range(game, game.wall_settings.bounce_speed_min, game.wall_settings.bounce_speed_max);
+    float elev = deg_to_rad(rand_wall_range(game, game.wall_settings.bounce_angle_min, game.wall_settings.bounce_angle_max));
+    float speed = wall_to_units(speed_m);
+    launch_y = speed * std::sin(elev);
+    float tangent = speed * std::cos(elev);
+    omega = 0.0f;
+    if (r > 0.0001f) {
+        omega = random_sign(game) * (tangent / r);
+    }
+}
+
+static void bounce_apply_cylinder(Target& target, float theta) {
+    float r = bounce_cylinder_radius(target.distance);
+    bounce_place_on_cylinder(target.pos, r, theta);
+    float omega = target.desired_vel.x;
+    target.vel.x = omega * r * std::cos(theta);
+    target.vel.z = omega * r * std::sin(theta);
+}
+
+static bool bounce_separated(const Vec3& a, float radius_a, const Vec3& b, float radius_b) {
+    return length(a - b) >= wall_spacing_for_radii(radius_a, radius_b);
+}
+
+static Target spawn_bounce_target(Game& game, int skip_index) {
+    float radius = wall_to_units(rand_wall_range(game, game.wall_settings.radius_min, game.wall_settings.radius_max));
+    float min_y = radius;
+    bool center_spawn = uses_center_wall_spawn(game);
+    float distance = center_spawn
+        ? 0.5f * (game.wall_settings.wall_distance_min + game.wall_settings.wall_distance_max)
+        : rand_wall_range(game, game.wall_settings.wall_distance_min, game.wall_settings.wall_distance_max);
+    float r = bounce_cylinder_radius(distance);
+    float limit = bounce_theta_limit(game, r, radius);
+    float theta = 0.0f;
+    Vec3 pos{0.0f, min_y, 0.0f};
+    bounce_place_on_cylinder(pos, r, theta);
+    pos.y = min_y;
+    bool placed = center_spawn;
+    for (int attempt = 0; attempt < 300 && !placed; ++attempt) {
+        distance = rand_wall_range(game, game.wall_settings.wall_distance_min, game.wall_settings.wall_distance_max);
+        r = bounce_cylinder_radius(distance);
+        limit = bounce_theta_limit(game, r, radius);
+        theta = rand_range(game, -limit, limit);
+        bounce_place_on_cylinder(pos, r, theta);
+        pos.y = min_y;
+        placed = true;
+        for (int i = 0; i < static_cast<int>(game.targets.size()); ++i) {
+            if (i == skip_index) {
+                continue;
+            }
+            if (!bounce_separated(pos, radius, game.targets[i].pos, game.targets[i].radius)) {
+                placed = false;
+                break;
+            }
+        }
+    }
+    if (!placed) {
+        int slots = std::max(2, game.wall_settings.target_count_min + 1);
+        for (int slot = 1; slot < slots && !placed; ++slot) {
+            float t = static_cast<float>(slot) / static_cast<float>(slots);
+            distance = game.wall_settings.wall_distance_min +
+                (game.wall_settings.wall_distance_max - game.wall_settings.wall_distance_min) * t;
+            r = bounce_cylinder_radius(distance);
+            limit = bounce_theta_limit(game, r, radius);
+            theta = -limit + (2.0f * limit) * t;
+            bounce_place_on_cylinder(pos, r, theta);
+            pos.y = min_y;
+            placed = true;
+            for (int i = 0; i < static_cast<int>(game.targets.size()); ++i) {
+                if (i == skip_index) {
+                    continue;
+                }
+                if (!bounce_separated(pos, radius, game.targets[i].pos, game.targets[i].radius)) {
+                    placed = false;
+                    break;
+                }
+            }
+        }
+    }
+    if (!placed) {
+        distance = 0.5f * (game.wall_settings.wall_distance_min + game.wall_settings.wall_distance_max);
+        r = bounce_cylinder_radius(distance);
+        theta = 0.0f;
+        bounce_place_on_cylinder(pos, r, theta);
+        pos.y = min_y;
+    }
+    float omega = 0.0f;
+    float launch_y = 0.0f;
+    bounce_sample_takeoff(game, r, omega, launch_y);
+    Vec3 vel{omega * r * std::cos(theta), launch_y, omega * r * std::sin(theta)};
+    int health = game.wall_settings.target_health;
+    return {pos, vel, {omega, launch_y, 0.0f}, 1.0e9f, radius, 0.0f, distance, health};
+}
+
 Target spawn_wall_target(Game& game, int skip_index) {
+    if (is_bounce(game.wall_settings)) {
+        return spawn_bounce_target(game, skip_index);
+    }
     float radius = wall_to_units(rand_wall_range(game, game.wall_settings.radius_min, game.wall_settings.radius_max));
     // Single-target infinite tracking starts in the middle of the spawn rectangle.
     // Clicking and target-switching keep a random spawn in that same rectangle.
@@ -134,7 +231,11 @@ void start_scenario(Game& game, const ScenarioDef& scenario, RunMode mode) {
     game.active_field = FieldId::None;
     game.scenario = scenario;
     game.scenario.kind = is_tracking(game.wall_settings.task_mode) ? ScenarioKind::Tracking : ScenarioKind::WallClick;
-    game.scenario.title = is_tracking(game.scenario.kind) ? "Wall tracking" : "Wall clicking";
+    if (is_bounce(game.wall_settings)) {
+        game.scenario.title = "The Bounce 180";
+    } else {
+        game.scenario.title = is_tracking(game.scenario.kind) ? "Wall tracking" : "Wall clicking";
+    }
     game.run_mode = mode;
     game.challenge_time_left = mode == RunMode::Challenge ? CHALLENGE_DURATION_SEC : 0.0f;
     game.fire_accumulator = 0.0f;
@@ -473,7 +574,89 @@ static void contain_wall_target(Game& game, Target& target) {
     lock_disabled_wall_axes(game, target);
 }
 
+static void bounce_floor_dir_change(Game& game, Target& target) {
+    float p = game.wall_settings.bounce_dir_change_p;
+    if (p <= 0.0f) {
+        return;
+    }
+    if (p >= 1.0f || rand_range(game, 0.0f, 1.0f) < p) {
+        target.desired_vel.x = -target.desired_vel.x;
+    }
+}
+
+static void contain_bounce_target(Game& game, Target& target) {
+    float floor_y = target.radius;
+    float ceil_y = ROOM_HEIGHT - target.radius;
+    float r = bounce_cylinder_radius(target.distance);
+    float limit = bounce_theta_limit(game, r, target.radius);
+    float theta = bounce_arc_theta(target.pos);
+    if (theta > limit) {
+        theta = limit;
+        target.desired_vel.x = -std::fabs(target.desired_vel.x);
+    } else if (theta < -limit) {
+        theta = -limit;
+        target.desired_vel.x = std::fabs(target.desired_vel.x);
+    }
+    if (target.pos.y < floor_y) {
+        target.pos.y = floor_y;
+        if (target.vel.y <= 0.0f) {
+            target.vel.y = std::fabs(target.desired_vel.y);
+        }
+    } else if (target.pos.y > ceil_y) {
+        target.pos.y = ceil_y;
+        target.vel.y = -std::fabs(target.vel.y);
+    }
+    bounce_apply_cylinder(target, theta);
+}
+
+static void update_bounce_targets(Game& game, float dt) {
+    float gravity = wall_to_units(std::max(game.wall_settings.bounce_gravity_m, 0.1f));
+    float speed = wall_to_units(std::max(game.wall_settings.bounce_speed_max, 0.5f));
+    float max_speed = speed + gravity;
+    int substeps = std::max(1, static_cast<int>(std::ceil((max_speed * dt) / std::max(0.04f, wall_to_units(game.wall_settings.radius_min) * 0.4f))));
+    substeps = std::min(substeps, 32);
+    float step_dt = dt / static_cast<float>(substeps);
+
+    for (int step = 0; step < substeps; ++step) {
+        for (Target& target : game.targets) {
+            float floor_y = target.radius;
+            float ceil_y = ROOM_HEIGHT - target.radius;
+            float r = bounce_cylinder_radius(target.distance);
+            float limit = bounce_theta_limit(game, r, target.radius);
+            target.vel.y -= gravity * step_dt;
+            float y0 = target.pos.y;
+            float y1 = y0 + target.vel.y * step_dt;
+            if (y1 <= floor_y && target.vel.y <= 0.0f) {
+                target.pos.y = floor_y;
+                target.vel.y = std::fabs(target.desired_vel.y);
+                if (y0 > floor_y) {
+                    bounce_floor_dir_change(game, target);
+                }
+            } else if (y1 >= ceil_y && target.vel.y >= 0.0f) {
+                target.pos.y = ceil_y;
+                target.vel.y = -std::fabs(target.vel.y);
+            } else {
+                target.pos.y = y1;
+            }
+            float theta = bounce_arc_theta(target.pos) + target.desired_vel.x * step_dt;
+            if (theta > limit) {
+                theta = limit;
+                target.desired_vel.x = -std::fabs(target.desired_vel.x);
+            } else if (theta < -limit) {
+                theta = -limit;
+                target.desired_vel.x = std::fabs(target.desired_vel.x);
+            }
+            bounce_apply_cylinder(target, theta);
+            contain_bounce_target(game, target);
+        }
+    }
+}
+
 void update_wall_targets(Game& game, float dt) {
+    if (is_bounce(game.wall_settings)) {
+        update_bounce_targets(game, dt);
+        return;
+    }
     float max_speed = std::sqrt(
         wall_to_units(game.wall_settings.horizontal_speed_max) * wall_to_units(game.wall_settings.horizontal_speed_max) +
         wall_to_units(game.wall_settings.vertical_speed_max) * wall_to_units(game.wall_settings.vertical_speed_max)

@@ -19,7 +19,13 @@ In the menu:
   The first keystroke replaces the shown number; backspace edits it.
 - `TAB` / `SHIFT+TAB` move between boxes, `ENTER` commits, `ESC` cancels editing.
 - The Tasks sidebar has a search box that filters presets by name as you type.
-- Each task can be clicking or tracking. Both modes have a Health setting (`1` = one shot, `N` = N hits, `0` = infinite).
+- Each task can be clicking or tracking, and wall motion or Bounce 180 motion.
+  Bounce 180 has its own settings: target count, spawn-radius range (also the room
+  size), ball radius, initial jump angle, initial speed, camera height, gravity, and
+  dir-change probability (default 0). Max jump height is shown from the max angle,
+  max speed, and gravity. Balls reverse on the back wall; they may also reverse
+  horizontally when they bounce off the floor. Both modes have a Health setting
+  (`1` = one shot, `N` = N hits, `0` = infinite).
 - **Reset tasks** replaces every saved task with the list in `scripts/default-tasks.py`.
 - **Practice** starts an endless run; **Challenge** starts a timed 60-second run.
   Clicking an already-selected preset in the list also starts a challenge.
@@ -110,8 +116,9 @@ This installs/refreshes `Aim Trainer Dev`, which uses the same launcher, so doub
 ## Modes And Settings
 
 - Wall tasks: wall distance (a min/max range — targets spawn at varying depths, so they can be closer when configured), a fixed target count, radius, horizontal speed, vertical speed, acceleration, and direction-change timing. Each direction change re-samples speed and acceleration from their min/max ranges. Set both speed values to `0` for static targets. Distance only changes room depth along the starting view axis; wall width/height stay fixed, so farther targets occupy a smaller angular spawn area. A tracking task with one target and infinite health spawns that target at the center of the spawn rectangle; clicking and target-switching keep random spawns.
+- Bounce 180 tasks use the same wall room with a separate editor. Spawn min/max is the allowed cylinder radius of each ball around the player (default 8-10m) and also places the left, right, and front inner faces a ball-radius outside the far value so spheres touch those walls without clipping. Each ball keeps that radius, samples an initial jump angle and speed from their ranges, and reverses when it hits the visible back wall. Gravity is a Bounce setting (default 6 m/s²). Dir change is the probability that a ball reverses its horizontal heading in the same frame it bounces off the floor (default 0; never in mid-air). There is no Accel control. Camera height is in meters (minimum 0.25 m); the Max jump readout is `(v_max · sin(angle_max))² / (2g)`. Wall H/V speed, accel, and timed dir-change stay on wall tasks only.
 - Each wall task can be clicking or tracking. Tracking auto-fires at 20 Hz in challenge mode (score = hits). Target health is how many hits destroy a target in either mode (`1` = one shot, `N` = N hits, `0` = infinite / never despawns). Clicking with health `0` is click-tracking: every click on the target scores, but the target stays.
-- Default presets come from `scripts/default-tasks.py`. A default task is size, wall (`close` / `mid` / `far`), a fixed target count, movement (`static` / `strafing` / `dynamic`), mode (`clicking` / `tracking`), and health. Clicking defaults are one-shot. Target-switching defaults are tracking copies of the dynamic/strafe clicking tasks (health `20` on dynamic, `10` on strafe). Tracking defaults are one small dynamic target with infinite health. Mid wall is omitted from the name; close and far append `CLOSE` or `FAR`; switching names include `SWITCHING` and the health value; tracking names include `TRACKING`. Edit that Python file and click **Reset tasks** to reload it immediately (no rebuild). `python scripts/default-tasks.py` still regenerates the committed JSON/C++ table for the next compile.
+- Default presets come from `scripts/default-tasks.py`. A default task is size, wall (`close` / `mid` / `far`), a fixed target count, movement (`static` / `strafing` / `dynamic` / `bounce`), mode (`clicking` / `tracking`), and health. Clicking defaults are one-shot. Target-switching defaults are tracking copies of the dynamic/strafe clicking tasks (health `20` on dynamic, `10` on strafe). Tracking defaults are one small dynamic target with infinite health. `THE BOUNCE 180` is a four-target clicking bounce task with a 0.08 m ball, 8-10 m spawn range, 30-75° jumps, 4-6 m/s takeoff, camera height 0.25 m, and gravity 6 m/s². Mid wall is omitted from the name; close and far append `CLOSE` or `FAR`; switching names include `SWITCHING` and the health value; tracking names include `TRACKING`. Edit that Python file and click **Reset tasks** to reload it immediately (no rebuild). `python scripts/default-tasks.py` still regenerates the committed JSON/C++ table for the next compile.
 - Static wall spawns enforce center spacing of at least `3 * radius`.
 - Settings are saved to `~/.aim_trainer.cfg` on macOS/Linux.
 - The Settings tab crosshair is Valorant-style: optional black outlines (opacity and thickness),
@@ -144,6 +151,7 @@ Render screenshots without manually playing:
 build/aim-trainer --debug-all debug-shots 1920 1080
 build/aim-trainer --debug-menu debug-shots/menu.bmp 1920 1080
 build/aim-trainer --debug-shot 1 debug-shots/tracking.bmp 1920 1080 8
+build/aim-trainer --debug-shot 2 debug-shots/bounce.bmp 1920 1080 8
 ```
 
 The screenshot runner uses the same render path as the app and saves high-DPI BMP captures.

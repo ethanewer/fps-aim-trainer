@@ -233,6 +233,15 @@
       "movement": "dynamic",
       "mode": "tracking",
       "health": 0
+    },
+    {
+      "name": "THE BOUNCE 180",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 4,
+      "movement": "bounce",
+      "mode": "clicking",
+      "health": 1
     }
   ]
 }

@@ -14,6 +14,16 @@ inline constexpr float ROOM_BACK_Z = 8.0f;
 inline constexpr float ROOM_WIDTH = 28.0f;
 inline constexpr float ROOM_HEIGHT = 15.75f;
 inline constexpr float ROOM_EYE_HEIGHT = ROOM_HEIGHT * 0.5f;
+inline constexpr float BOUNCE_GRAVITY_M = 6.0f;
+inline constexpr float BOUNCE_GRAVITY_LEGACY_M = 9.81f;
+inline constexpr float BOUNCE_ANGLE_MIN_DEG = 30.0f;
+inline constexpr float BOUNCE_ANGLE_MAX_DEG = 75.0f;
+inline constexpr float BOUNCE_SPEED_MIN_M = 4.0f;
+inline constexpr float BOUNCE_SPEED_MAX_M = 6.0f;
+inline constexpr float BOUNCE_CAMERA_HEIGHT_MIN_M = 0.25f;
+inline constexpr float BOUNCE_CAMERA_HEIGHT_M = 0.25f;
+inline constexpr float BOUNCE_DIR_CHANGE_P = 0.0f;
+inline constexpr int BOUNCE_DEFAULT_TARGETS = 4;
 inline constexpr float CAMERA_REFERENCE_HEIGHT_M = 2.0f;
 inline constexpr float WALL_TARGET_RADIUS_MIN_M = 0.01f;
 inline constexpr float WALL_TARGET_RADIUS_MAX_M = 0.45f;
@@ -56,6 +66,13 @@ enum class FieldId {
     WallAccelMax,
     WallDirMin,
     WallDirMax,
+    BounceAngleMin,
+    BounceAngleMax,
+    BounceSpeedMin,
+    BounceSpeedMax,
+    BounceCamera,
+    BounceGravity,
+    BounceDirChange,
     // Playlists tab
     PlaylistSearch,
     PlaylistName,
@@ -86,6 +103,7 @@ inline bool is_tracking(TaskMode mode) {
 
 struct WallClickSettings {
     TaskMode task_mode = TaskMode::Clicking;
+    bool bounce = false;  // cylindrical Bounce 180 in the wall room
     int target_health = 1;  // 0 = infinite; 1 = one shot; N = N hits to kill
     int target_count_min = 3;
     int target_count_max = 3;
@@ -101,7 +119,18 @@ struct WallClickSettings {
     float acceleration_max = 8.0f;
     float change_min = 1.0f;
     float change_max = 2.0f;
+    float bounce_angle_min = BOUNCE_ANGLE_MIN_DEG;
+    float bounce_angle_max = BOUNCE_ANGLE_MAX_DEG;
+    float bounce_speed_min = BOUNCE_SPEED_MIN_M;
+    float bounce_speed_max = BOUNCE_SPEED_MAX_M;
+    float bounce_camera_height_m = BOUNCE_CAMERA_HEIGHT_M;
+    float bounce_gravity_m = BOUNCE_GRAVITY_M;
+    float bounce_dir_change_p = BOUNCE_DIR_CHANGE_P;
 };
+
+inline bool is_bounce(const WallClickSettings& settings) {
+    return settings.bounce;
+}
 
 struct CrosshairSettings {
     float length = 9.0f;
@@ -152,7 +181,7 @@ struct Target {
     float change_timer = 0.0f;
     float radius;
     float acceleration = 0.0f;
-    float distance = 0.0f;  // wall targets: depth in meters (sets the plane bounds)
+    float distance = 0.0f;  // wall: depth in meters; bounce: fixed cylinder radius in meters
     int health = 0;         // remaining hits until respawn; 0 with settings health 0 is infinite
 };
 

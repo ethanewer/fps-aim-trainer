@@ -24,6 +24,7 @@
 #include "scenario.hpp"
 #include "selftest.hpp"
 #include "types.hpp"
+#include "world.hpp"
 
 struct WindowSize {
     int w;
@@ -244,7 +245,7 @@ static bool render_debug_shot(int scenario_index, const std::string& path, int w
     game.rng.seed(7);
     load_settings(game);
     init_scenarios(game);
-    if (scenario_index < 0 || scenario_index > 1 || game.scenarios.empty()) {
+    if (scenario_index < 0 || scenario_index > 2 || game.scenarios.empty()) {
         std::fprintf(stderr, "Invalid scenario index %d\n", scenario_index);
         SDL_GL_DeleteContext(gl);
         SDL_DestroyWindow(window);
@@ -253,8 +254,49 @@ static bool render_debug_shot(int scenario_index, const std::string& path, int w
     if (scenario_index == 1) {
         game.wall_settings.task_mode = TaskMode::Tracking;
         game.wall_settings.target_health = 0;
+    } else if (scenario_index == 2) {
+        game.wall_settings.bounce = true;
+        game.wall_settings.task_mode = TaskMode::Clicking;
+        game.wall_settings.target_health = 1;
+        game.wall_settings.target_count_min = 4;
+        game.wall_settings.target_count_max = 4;
+        game.wall_settings.radius_min = 0.08f;
+        game.wall_settings.radius_max = 0.08f;
+        game.wall_settings.horizontal_speed_min = 1.0f;
+        game.wall_settings.horizontal_speed_max = 1.5f;
+        game.wall_settings.vertical_speed_min = 0.0f;
+        game.wall_settings.vertical_speed_max = 0.75f;
+        float even = 8.0f;
+        game.wall_settings.wall_distance_min = even;
+        game.wall_settings.wall_distance_max = 10.0f;
+        game.wall_preset_name = "THE BOUNCE 180";
+        game.target_color = {255, 70, 85};
+        normalize_settings(game);
     }
     start_scenario(game, game.scenarios[0]);
+    if (scenario_index == 2 && !game.targets.empty()) {
+        float ball_radius = game.targets[0].radius;
+        int n = static_cast<int>(game.targets.size());
+        for (int i = 0; i < n; ++i) {
+            float t = (n == 1) ? 0.5f : (static_cast<float>(i) / static_cast<float>(n - 1));
+            float distance = game.wall_settings.wall_distance_min +
+                (game.wall_settings.wall_distance_max - game.wall_settings.wall_distance_min) * t;
+            float r = bounce_cylinder_radius(distance);
+            float limit = bounce_theta_limit(game, r, ball_radius);
+            float theta = (n == 1) ? limit : ((i % 2 == 0) ? -limit : limit) * (0.70f + 0.30f * t);
+            bounce_place_on_cylinder(game.targets[i].pos, r, theta);
+            game.targets[i].pos.y = ball_radius;
+            game.targets[i].distance = distance;
+            game.targets[i].desired_vel = {0.0f, 0.0f, 0.0f};
+            game.targets[i].vel = {0.0f, 0.0f, 0.0f};
+            game.targets[i].radius = ball_radius;
+        }
+        Vec3 eye = camera_pos(game);
+        Vec3 to = game.targets[0].pos - eye;
+        game.yaw = std::atan2(to.x, -to.z);
+        float horiz = std::hypot(to.x, to.z);
+        game.pitch = std::atan2(to.y, std::max(horiz, 0.001f)) - deg_to_rad(4.0f);
+    }
 
     for (int frame = 0; frame < std::max(1, frames); ++frame) {
         Input input;
@@ -417,6 +459,15 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
             menu_focus_field(game, FieldId::PresetSearch);
             game.edit_draft = "strafe";
             game.edit_fresh = false;
+        } else if (state_index == 8) {
+            for (int i = 0; i < static_cast<int>(game.wall_presets.size()); ++i) {
+                if (game.wall_presets[i].name == "THE BOUNCE 180") {
+                    game.selected_wall_preset = i;
+                    game.wall_preset_scroll = std::max(0, i - VISIBLE_PRESET_ROWS + 1);
+                    apply_selected_presets(game);
+                    break;
+                }
+            }
         }
     } else {
         game.menu_tab = MenuTab::Settings;
@@ -565,7 +616,7 @@ static int run_debug_mode(int argc, char** argv) {
         }
         make_dir_if_needed(argv[2]);
         bool ok = true;
-        for (int scenario = 0; scenario < 2; ++scenario) {
+        for (int scenario = 0; scenario < 3; ++scenario) {
             char path[1024];
             std::snprintf(path, sizeof(path), "%s/scenario-%d.bmp", argv[2], scenario);
             ok = render_debug_shot(scenario, path, width, height, frames) && ok;

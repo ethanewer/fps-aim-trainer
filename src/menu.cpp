@@ -69,7 +69,9 @@ static FieldDesc f_search(std::string* p) {
 }
 
 static FieldDesc field_desc(Game& g, FieldId id) {
-    int capacity = wall_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance_max);
+    int capacity = is_bounce(g.wall_settings)
+        ? bounce_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance_max)
+        : wall_capacity_for_radius(g.wall_settings.radius_max, g.wall_settings.wall_distance_max);
     switch (id) {
         case FieldId::PresetSearch: return f_search(&g.preset_search);
         case FieldId::WallName: return f_name(&g.wall_preset_name);
@@ -87,6 +89,13 @@ static FieldDesc field_desc(Game& g, FieldId id) {
         case FieldId::WallAccelMax: return f_float(&g.wall_settings.acceleration_max, 0.0f, 40.0f, 2);
         case FieldId::WallDirMin: return f_float(&g.wall_settings.change_min, 0.0f, 12.0f, 2);
         case FieldId::WallDirMax: return f_float(&g.wall_settings.change_max, 0.0f, 12.0f, 2);
+        case FieldId::BounceAngleMin: return f_float(&g.wall_settings.bounce_angle_min, 0.0f, 85.0f, 1);
+        case FieldId::BounceAngleMax: return f_float(&g.wall_settings.bounce_angle_max, 0.0f, 85.0f, 1);
+        case FieldId::BounceSpeedMin: return f_float(&g.wall_settings.bounce_speed_min, 0.0f, 20.0f, 2);
+        case FieldId::BounceSpeedMax: return f_float(&g.wall_settings.bounce_speed_max, 0.0f, 20.0f, 2);
+        case FieldId::BounceCamera: return f_float(&g.wall_settings.bounce_camera_height_m, BOUNCE_CAMERA_HEIGHT_MIN_M, 3.2f, 2);
+        case FieldId::BounceGravity: return f_float(&g.wall_settings.bounce_gravity_m, 0.1f, 40.0f, 2);
+        case FieldId::BounceDirChange: return f_float(&g.wall_settings.bounce_dir_change_p, 0.0f, 1.0f, 2);
         case FieldId::PlaylistSearch: return f_search(&g.playlist_search);
         case FieldId::PlaylistName: return f_name(&g.playlist_name);
         case FieldId::PlaylistAddSearch: return f_search(&g.playlist_add_search);
@@ -196,6 +205,14 @@ static const FieldId WALL_ORDER[] = {
     FieldId::WallAccelMin, FieldId::WallAccelMax,
     FieldId::WallDirMin, FieldId::WallDirMax,
 };
+static const FieldId BOUNCE_ORDER[] = {
+    FieldId::PresetSearch, FieldId::WallName, FieldId::WallTargetsMin, FieldId::WallHealth,
+    FieldId::WallDistMin, FieldId::WallDistMax,
+    FieldId::WallRadiusMin, FieldId::WallRadiusMax,
+    FieldId::BounceAngleMin, FieldId::BounceAngleMax,
+    FieldId::BounceSpeedMin, FieldId::BounceSpeedMax,
+    FieldId::BounceCamera, FieldId::BounceGravity, FieldId::BounceDirChange,
+};
 static const FieldId PLAYLIST_ORDER[] = {
     FieldId::PlaylistSearch, FieldId::PlaylistName, FieldId::PlaylistAddSearch,
 };
@@ -209,8 +226,13 @@ static const FieldId GEN_ORDER[] = {
 static void tab_field_order(const Game& g, const FieldId** order, int* count) {
     switch (g.menu_tab) {
         case MenuTab::Clicking:
-            *order = WALL_ORDER;
-            *count = static_cast<int>(sizeof(WALL_ORDER) / sizeof(WALL_ORDER[0]));
+            if (is_bounce(g.wall_settings)) {
+                *order = BOUNCE_ORDER;
+                *count = static_cast<int>(sizeof(BOUNCE_ORDER) / sizeof(BOUNCE_ORDER[0]));
+            } else {
+                *order = WALL_ORDER;
+                *count = static_cast<int>(sizeof(WALL_ORDER) / sizeof(WALL_ORDER[0]));
+            }
             break;
         case MenuTab::Playlists:
             *order = PLAYLIST_ORDER;
@@ -590,6 +612,21 @@ static void row_single(Game& g, const Input& in, float label_x, float box_x, flo
     value_box(g, in, id, box_x, row_y, box_w, box_h);
 }
 
+static void row_readout(float label_x, float box_x, float row_y, const std::string& label, const std::string& value, float box_w, float box_h) {
+    field_label(label_x, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, label);
+    rect(box_x, row_y, box_w, box_h, 24, 28, 34);
+    uint8_t br = 70;
+    uint8_t bg = 80;
+    uint8_t bb = 92;
+    rect(box_x, row_y, box_w, 2.0f, br, bg, bb);
+    rect(box_x, row_y + box_h - 2.0f, box_w, 2.0f, br, bg, bb);
+    rect(box_x, row_y, 2.0f, box_h, br, bg, bb);
+    rect(box_x + box_w - 2.0f, row_y, 2.0f, box_h, br, bg, bb);
+    float tw = text_width(value, VALUE_SCALE);
+    float tx = std::max(box_x + 8.0f, box_x + box_w - 12.0f - tw);
+    text(tx, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, value, VALUE_SCALE, 150, 162, 178);
+}
+
 static void row_range(Game& g, const Input& in, float label_x, float min_x, float max_x, float row_y, const std::string& label, FieldId min_id, FieldId max_id, float box_w, float box_h) {
     field_label(label_x, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, label);
     value_box(g, in, min_id, min_x, row_y, box_w, box_h);
@@ -768,8 +805,10 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
 
     float x = left + EDITOR_DX;
     bool tracking = is_tracking(g.wall_settings.task_mode);
+    bool bounce = is_bounce(g.wall_settings);
     ScenarioKind kind = tracking ? ScenarioKind::Tracking : ScenarioKind::WallClick;
-    draw_editor_header(g, in, x, tracking ? "Wall tracking" : "Wall clicking", FieldId::WallName, kind);
+    const char* title = bounce ? "The Bounce 180" : (tracking ? "Wall tracking" : "Wall clicking");
+    draw_editor_header(g, in, x, title, FieldId::WallName, kind);
 
     float cl = x + 14.0f;
     float inner_right = cl + EDITOR_W - 28.0f;
@@ -793,6 +832,17 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
     }
     row_y += pitch;
 
+    field_label(cl, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Motion");
+    if (toggle_button(in, min_x, row_y, box_w, box_h, "Wall", !bounce)) {
+        menu_blur_field(g);
+        g.wall_settings.bounce = false;
+    }
+    if (toggle_button(in, max_x, row_y, box_w, box_h, "Bounce", bounce)) {
+        menu_blur_field(g);
+        g.wall_settings.bounce = true;
+    }
+    row_y += pitch;
+
     field_label(cl, row_y + (box_h - text_height(VALUE_SCALE)) * 0.5f, "Targets");
     value_box(g, in, FieldId::WallTargetsMin, min_x, row_y, box_w, box_h);
     row_y += pitch;
@@ -805,12 +855,25 @@ static void draw_tasks_tab(Game& g, const Input& in, float left) {
     draw_column_headers(min_x, max_x, box_w, row_y + 4.0f);
     row_y += 18.0f;
 
-    row_range(g, in, cl, min_x, max_x, row_y, "Wall [m]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "Radius [m]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "H speed [m/s]", FieldId::WallHSpeedMin, FieldId::WallHSpeedMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "V speed [m/s]", FieldId::WallVSpeedMin, FieldId::WallVSpeedMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "Accel [m/s2]", FieldId::WallAccelMin, FieldId::WallAccelMax, box_w, box_h); row_y += pitch;
-    row_range(g, in, cl, min_x, max_x, row_y, "Dir change [s]", FieldId::WallDirMin, FieldId::WallDirMax, box_w, box_h);
+    if (bounce) {
+        row_range(g, in, cl, min_x, max_x, row_y, "Spawn [m]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "Radius [m]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "Angle [deg]", FieldId::BounceAngleMin, FieldId::BounceAngleMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "Speed [m/s]", FieldId::BounceSpeedMin, FieldId::BounceSpeedMax, box_w, box_h); row_y += pitch;
+        row_single(g, in, cl, min_x, row_y, "Camera [m]", FieldId::BounceCamera, box_w, box_h); row_y += pitch;
+        row_single(g, in, cl, min_x, row_y, "Gravity [m/s2]", FieldId::BounceGravity, box_w, box_h); row_y += pitch;
+        row_single(g, in, cl, min_x, row_y, "Dir change", FieldId::BounceDirChange, box_w, box_h); row_y += pitch;
+        char jump[32];
+        std::snprintf(jump, sizeof(jump), "%.2f", bounce_max_jump_height_m(g.wall_settings));
+        row_readout(cl, min_x, row_y, "Max jump [m]", jump, box_w, box_h);
+    } else {
+        row_range(g, in, cl, min_x, max_x, row_y, "Wall [m]", FieldId::WallDistMin, FieldId::WallDistMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "Radius [m]", FieldId::WallRadiusMin, FieldId::WallRadiusMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "H speed [m/s]", FieldId::WallHSpeedMin, FieldId::WallHSpeedMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "V speed [m/s]", FieldId::WallVSpeedMin, FieldId::WallVSpeedMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "Accel [m/s2]", FieldId::WallAccelMin, FieldId::WallAccelMax, box_w, box_h); row_y += pitch;
+        row_range(g, in, cl, min_x, max_x, row_y, "Dir change [s]", FieldId::WallDirMin, FieldId::WallDirMax, box_w, box_h);
+    }
 
     draw_footer_hint(x);
 }

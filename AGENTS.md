@@ -12,7 +12,18 @@ Guidance for AI agents (and humans) working in this repository. Read this before
   on Linux), rasterized with `stb_truetype`.
 - **Platforms:** macOS is primary (SDL2 from Homebrew). Linux and Windows are supported by the
   same source; see `README.md` for per-platform build notes.
-- **What it does:** wall tasks in a 3D room, each of which can be `CLICKING` or `TRACKING`.
+- **What it does:** wall tasks in a 3D room, each of which can be `CLICKING` or `TRACKING`,
+  with `Wall` or `Bounce` motion. Bounce 180 keeps the wall room, sizes left/right/front
+  inner faces a ball-radius outside the far spawn cylinder so spheres touch without
+  clipping, and runs balls on cylinders around the player. Bounce has
+  its own editor: target count, spawn-radius range (also the room size), ball radius,
+  initial jump-angle range, initial speed range, camera height, gravity, and a floor
+  dir-change probability (default 0). Max jump
+  height is a computed readout from max speed, max angle, and gravity. Each ball
+  keeps its spawn radius and only bounces off the floor and the visible back wall
+  (not a 90° clip at the camera); contact is at the sphere surface with no penetration.
+  On a floor bounce, the ball may reverse its horizontal heading with that probability,
+  in the same frame as the vertical bounce; it never reverses heading in mid-air.
   Aim uses a fixed-FOV sensitivity model (horizontal FOV locked to 103°, yaw =
   `0.07° per mouse count × in-game sensitivity`). All user-facing distances/sizes/speeds are in
   meters / m·s⁻¹ / m·s⁻², converted to internal units against a 2 m camera-height reference.
@@ -149,14 +160,15 @@ every menu or rendering change.
 #   tab:   0=TASKS  1=PLAYLISTS  2=SETTINGS
 #   state: 0=default  1=empty-name editing  2=long-name editing
 #          3=long preset list (scrolled)  4=max-range stress  5=focused numeric box
-#          6=tracking mode selected  7=task search (strafe)
+#          6=tracking mode selected  7=task search (strafe)  8=bounce 180 selected
 #          Playlists tab: 0=sample playlist  1=empty  2=long name  3=long list
 #                         7=add-task search  8=long entry list  9=resume available
 #          Settings tab:  0=default  1=center-dot only (length 0, outlines on)
 #                         2=inner lines + center dot + outlines
 ./build/aim-trainer --debug-menu /tmp/menu.bmp 1920 1080 0 0
 
-# Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]   (0=clicking, 1=tracking)
+# Scenario: --debug-shot <scenario-index> <out.bmp> [width height frames]
+#   0=clicking  1=tracking  2=bounce 180
 ./build/aim-trainer --debug-shot 0 /tmp/wall.bmp 1920 1080 8
 
 # Challenge results screen: --debug-results <out.bmp> [width height scenario]
@@ -192,7 +204,9 @@ alignment, overflow, and focus highlighting.
   factors in `draw_menu` — if you change the draw transform, change the mouse transform to match.
   The Tasks sidebar search box is `FieldId::PresetSearch`; it filters presets by case-insensitive
   substring and is first in the Tasks tab order. Playlists tab order is `PlaylistSearch`,
-  `PlaylistName`, `PlaylistAddSearch`.
+  `PlaylistName`, `PlaylistAddSearch`. Bounce 180 uses a separate tab order after radius:
+  jump angle, takeoff speed, camera height, gravity, then dir-change probability. Wall H/V
+  speed, accel, and timed dir-change are hidden while Bounce is selected.
 - **Editing model:** each editable box is a `FieldId`; the focused field's text lives in
   `game.edit_draft` and is committed to the real value on blur/Enter/Tab/focus-change. Numeric
   fields fresh-replace on the first keystroke; names sanitize on commit. `field_desc()` in
@@ -205,7 +219,13 @@ alignment, overflow, and focus highlighting.
   The room/far-plane depth is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files. (Current: `version 12`; v12 files without
+  format. Don't silently break existing `.cfg` files. (Current: `version 18`; v17 files
+  without bounce dir-change probability keep 0; v16 files
+  without bounce gravity keep 9.81 m/s²; v15 files
+  without bounce jump fields keep default angle/speed/camera; v14 Bounce 180
+  one-target presets migrate to four balls; v13 Bounce 180
+  half-width ranges migrate to 8-10m; v12 files without a
+  bounce flag load as wall motion; v12 files without
   outline opacity default to 0.5; v11 three-value
   `crosshair` lines load with outlines and center dot off; v10 files load with
   empty playlists; v9 built-in presets
@@ -213,10 +233,12 @@ alignment, overflow, and focus highlighting.
   health 1; v7 wall presets migrate to clicking with health 1; v4 single wall distance migrates
   to a min==max range. Leftover `pill_preset` lines are ignored.)
   Default tasks live in `data/default-tasks.json` as size, wall (`close` / `mid` / `far`),
-  a fixed target count, movement (`static` / `strafing` / `dynamic`), mode, and health.
+  a fixed target count, movement (`static` / `strafing` / `dynamic` / `bounce`), mode, and health.
   Clicking defaults are one-shot. Target-switching defaults are tracking copies of the
   dynamic/strafe clicking tasks (health 20 on dynamic, 10 on strafe). Tracking defaults
-  are one small dynamic target with infinite health. A tracking task with one target
+  are one small dynamic target with infinite health. `THE BOUNCE 180` is a four-target
+  clicking bounce task with a 0.08 m ball, 8-10 m spawn range, 30-75° jump angle,
+  4-6 m/s takeoff speed, camera height 0.25 m, and gravity 6 m/s². A tracking task with one target
   and infinite health spawns at the center of the spawn rectangle; clicking and
   switching stay random.
   Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`;

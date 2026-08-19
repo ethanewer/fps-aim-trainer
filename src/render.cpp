@@ -84,7 +84,39 @@ static void look_at(Vec3 eye, Vec3 center, Vec3 up) {
     glMultMatrixf(m);
 }
 
+static void draw_bounce_room(const Game& game) {
+    constexpr float thick = 0.18f;
+    float half = bounce_half_extent(game);
+    float floor_y = 0.0f;
+    float ceil_y = ROOM_HEIGHT;
+    float left = -half;
+    float right = half;
+    float front = bounce_front_z(game);
+    float back = bounce_back_z(game);
+    float mid_z = (front + back) * 0.5f;
+    float mid_y = (floor_y + ceil_y) * 0.5f;
+    float span_x = right - left;
+    float span_y = ceil_y - floor_y;
+    float span_z = back - front;
+
+    room_color(game.wall_color, 1.00f);
+    draw_box({0.0f, mid_y, front - thick * 0.5f}, {span_x + thick, span_y + thick, thick});
+    room_color(game.wall_color, 0.92f);
+    draw_box({0.0f, mid_y, back + thick * 0.5f}, {span_x + thick, span_y + thick, thick});
+    room_color(game.wall_color, 0.87f);
+    draw_box({0.0f, floor_y - thick * 0.5f, mid_z}, {span_x + thick, thick, span_z + thick});
+    room_color(game.wall_color, 0.83f);
+    draw_box({0.0f, ceil_y + thick * 0.5f, mid_z}, {span_x + thick, thick, span_z + thick});
+    room_color(game.wall_color, 0.77f);
+    draw_box({left - thick * 0.5f, mid_y, mid_z}, {thick, span_y + thick, span_z});
+    draw_box({right + thick * 0.5f, mid_y, mid_z}, {thick, span_y + thick, span_z});
+}
+
 static void draw_wall_room(const Game& game) {
+    if (is_bounce(game.wall_settings)) {
+        draw_bounce_room(game);
+        return;
+    }
     constexpr float WALL_VISUAL_SCALE = 1.10f;
     float wall_distance = game.wall_settings.wall_distance_max;  // back wall at the farthest configured distance
     float wall_z = wall_z_from_distance(wall_distance);
