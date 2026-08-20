@@ -352,7 +352,33 @@ int run_self_test() {
     game.active_field = FieldId::WallName;
     delete_wall_preset(game);
     ok = self_test_check(!game.wall_presets.empty() && game.wall_presets[0].name == "1W3T DYNAMIC" && find_wall_preset(game, "1W3TES STATIC") >= 0, "deleting the last wall preset restores default wall presets") && ok;
+    ok = self_test_check(game.deleted_default_tasks.empty(), "deleting the last wall preset clears suppressed defaults") && ok;
     ok = self_test_check(game.active_field == FieldId::None, "delete wall preset exits text edit mode") && ok;
+
+    {
+        Game delete_default;
+        ensure_presets(delete_default);
+        int before_count = static_cast<int>(delete_default.wall_presets.size());
+        int dynamic = find_wall_preset(delete_default, "1W3T DYNAMIC");
+        ok = self_test_check(dynamic == 0, "delete-default test starts on the first builtin") && ok;
+        delete_default.selected_wall_preset = dynamic;
+        apply_selected_presets(delete_default);
+        delete_wall_preset(delete_default);
+        ensure_presets(delete_default);
+        ok = self_test_check(find_wall_preset(delete_default, "1W3T DYNAMIC") < 0 && static_cast<int>(delete_default.wall_presets.size()) == before_count - 1, "deleting a builtin task keeps it gone after ensure_presets") && ok;
+        ok = self_test_check(delete_default.wall_preset_name == "1W3TS DYNAMIC", "deleting a task selects the next visible task") && ok;
+        ok = self_test_check(static_cast<int>(delete_default.deleted_default_tasks.size()) == 1 && delete_default.deleted_default_tasks[0] == "1W3T DYNAMIC", "deleting a builtin records it so catalog injection skips it") && ok;
+        reset_wall_presets(delete_default);
+        ok = self_test_check(find_wall_preset(delete_default, "1W3T DYNAMIC") >= 0 && delete_default.deleted_default_tasks.empty(), "reset tasks restores a deleted builtin") && ok;
+    }
+
+    {
+        Game oob_delete;
+        oob_delete.wall_presets = {{"KEEP A", WallClickSettings{}}, {"KEEP B", WallClickSettings{}}};
+        oob_delete.selected_wall_preset = 99;
+        delete_wall_preset(oob_delete);
+        ok = self_test_check(static_cast<int>(oob_delete.wall_presets.size()) == 2 && oob_delete.wall_presets[0].name == "KEEP A" && oob_delete.wall_presets[1].name == "KEEP B", "delete with an out-of-range selection does not erase a task") && ok;
+    }
 
     {
         Game reset_test;
@@ -443,6 +469,23 @@ int run_self_test() {
         search_test.preset_search = "NOPE";
         new_wall_preset(search_test);
         ok = self_test_check(search_test.preset_search.empty() && matching_wall_presets(search_test).size() == 5, "new task clears search so the copy is visible") && ok;
+    }
+
+    {
+        Game filtered_delete;
+        ensure_presets(filtered_delete);
+        filtered_delete.preset_search = "SWITCHING 20";
+        std::vector<int> hits = matching_wall_presets(filtered_delete);
+        ok = self_test_check(hits.size() >= 2, "switching 20 search has multiple matches") && ok;
+        filtered_delete.selected_wall_preset = hits[0];
+        apply_selected_presets(filtered_delete);
+        std::string first_match = filtered_delete.wall_preset_name;
+        std::string second_match = filtered_delete.wall_presets[hits[1]].name;
+        delete_wall_preset(filtered_delete);
+        ok = self_test_check(find_wall_preset(filtered_delete, first_match) < 0, "filtered delete removes the selected matching task") && ok;
+        ok = self_test_check(filtered_delete.wall_preset_name == second_match, "filtered delete selects the next matching task") && ok;
+        std::vector<int> after = matching_wall_presets(filtered_delete);
+        ok = self_test_check(!after.empty() && after[0] == filtered_delete.selected_wall_preset, "filtered delete keeps the new selection in the visible matches") && ok;
     }
 
     g_settings_path_override = "build/self-test-settings.cfg";
@@ -785,7 +828,61 @@ int run_self_test() {
         apply_selected_presets(delete_pl);
         delete_wall_preset(delete_pl);
         ok = self_test_check(delete_pl.playlists[0].task_names.size() == 1 && delete_pl.playlists[0].task_names[0] == "1W3T DYNAMIC", "deleting a task drops matching playlist entries") && ok;
+        ok = self_test_check(find_wall_preset(delete_pl, "MY TASK") < 0, "deleting a custom task removes it from the preset list") && ok;
+        ok = self_test_check(delete_pl.deleted_default_tasks.empty(), "deleting a custom task does not suppress a builtin name") && ok;
     }
+
+    {
+        Game persist_delete;
+        ensure_presets(persist_delete);
+        persist_delete.playlists = {{"WARMUP", {"1W3T DYNAMIC", "1W3T STRAFE"}}};
+        persist_delete.selected_wall_preset = find_wall_preset(persist_delete, "1W3T DYNAMIC");
+        apply_selected_presets(persist_delete);
+        delete_wall_preset(persist_delete);
+        save_settings(persist_delete);
+        Game persist_loaded;
+        load_settings(persist_loaded);
+        ok = self_test_check(find_wall_preset(persist_loaded, "1W3T DYNAMIC") < 0, "deleted builtin tasks stay gone after save/load") && ok;
+        ok = self_test_check(persist_loaded.playlists.size() == 1 && persist_loaded.playlists[0].task_names.size() == 1 && persist_loaded.playlists[0].task_names[0] == "1W3T STRAFE", "playlist entries for a deleted task stay dropped after save/load") && ok;
+    }
+
+    {
+        Game last_pl;
+        ensure_presets(last_pl);
+        last_pl.playlists = {{"ONLY", {"1W3T DYNAMIC"}}};
+        last_pl.selected_playlist = 0;
+        apply_selected_playlist(last_pl);
+        delete_playlist(last_pl);
+        ok = self_test_check(last_pl.playlists.empty() && last_pl.playlist_name.empty(), "deleting the last playlist leaves an empty list") && ok;
+        save_settings(last_pl);
+        Game last_loaded;
+        load_settings(last_loaded);
+        ok = self_test_check(last_loaded.playlists.empty(), "deleting the last playlist stays empty after save/load") && ok;
+    }
+
+    {
+        Game mid_pl;
+        mid_pl.playlists = {{"KEEP", {}}, {"DROP", {}}, {"ALSO KEEP", {}}};
+        mid_pl.selected_playlist = 0;
+        mid_pl.playlist_search = "KEEP";
+        delete_playlist(mid_pl);
+        ok = self_test_check(static_cast<int>(mid_pl.playlists.size()) == 2 && mid_pl.playlists[0].name == "DROP" && mid_pl.playlists[1].name == "ALSO KEEP", "deleting a playlist removes only that playlist") && ok;
+        ok = self_test_check(mid_pl.playlist_name == "ALSO KEEP", "deleting a playlist selects the next matching playlist") && ok;
+        mid_pl.selected_playlist = 99;
+        delete_playlist(mid_pl);
+        ok = self_test_check(static_cast<int>(mid_pl.playlists.size()) == 2, "delete playlist ignores an out-of-range selection") && ok;
+    }
+
+    {
+        std::ofstream v18_missing("build/self-test-settings.cfg");
+        v18_missing << "version 18\n";
+        v18_missing << "selected_wall 0\n";
+        v18_missing << "wall_preset \"CUSTOM\" 1 1 8 10 0.08 0.08 0 0 0 0 0 0 0 0\n";
+    }
+    Game v18_missing_loaded;
+    load_settings(v18_missing_loaded);
+    ok = self_test_check(find_wall_preset(v18_missing_loaded, "1W3T DYNAMIC") >= 0 && find_wall_preset(v18_missing_loaded, "CUSTOM") >= 0, "v18 files without deleted_default still inject missing builtins") && ok;
+    ok = self_test_check(v18_missing_loaded.deleted_default_tasks.empty(), "v18 files load with no suppressed defaults") && ok;
 
     {
         Game empty_play;
@@ -1959,6 +2056,21 @@ int run_self_test() {
         ok = self_test_check(!resume_playlist(other) && other.playlist_paused, "resume is a no-op on a different playlist") && ok;
         start_playlist(other, 0);
         ok = self_test_check(other.mode == AppMode::Playing && !other.playlist_paused && other.playlist_play_name == "OTHER", "play starts a new session and clears the previous pause") && ok;
+
+        Game paused_delete;
+        paused_delete.rng.seed(8);
+        ensure_presets(paused_delete);
+        init_scenarios(paused_delete);
+        paused_delete.playlists = {
+            {"WARMUP", {paused_delete.wall_presets[first].name, paused_delete.wall_presets[second].name}},
+            {"OTHER", {paused_delete.wall_presets[first].name}},
+        };
+        paused_delete.selected_playlist = 0;
+        start_playlist(paused_delete);
+        abort_to_menu(paused_delete);
+        ok = self_test_check(paused_delete.playlist_paused, "paused-delete test has a resumable session") && ok;
+        delete_playlist(paused_delete);
+        ok = self_test_check(!paused_delete.playlist_paused && paused_delete.playlists.size() == 1 && paused_delete.playlists[0].name == "OTHER", "deleting the paused playlist clears the session") && ok;
 
         std::remove(g_runs_path_override.c_str());
         g_runs_path_override.clear();

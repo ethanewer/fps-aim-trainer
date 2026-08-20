@@ -395,6 +395,41 @@ static void reveal_selected_row(int selected, int count, int& scroll, int visibl
     scroll = std::max(0, std::min(scroll, std::max(0, count - visible_rows)));
 }
 
+static int match_position(const std::vector<int>& matches, int index) {
+    for (int i = 0; i < static_cast<int>(matches.size()); ++i) {
+        if (matches[i] == index) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// After erasing `deleted_index`, pick a nearby row from the pre-delete match list.
+static int selection_after_delete(const std::vector<int>& matches, int deleted_index, int remaining_count) {
+    if (remaining_count <= 0) {
+        return 0;
+    }
+    int match_pos = match_position(matches, deleted_index);
+    int chosen = deleted_index;
+    if (match_pos >= 0 && static_cast<int>(matches.size()) > 1) {
+        int next_pos = match_pos + 1 < static_cast<int>(matches.size()) ? match_pos + 1 : match_pos - 1;
+        chosen = matches[next_pos];
+    }
+    if (chosen > deleted_index) {
+        chosen -= 1;
+    }
+    return std::max(0, std::min(chosen, remaining_count - 1));
+}
+
+static void reveal_matching_row(int selected_index, const std::vector<int>& matches, int& scroll, int visible_rows) {
+    int row = match_position(matches, selected_index);
+    if (row < 0) {
+        scroll = std::max(0, std::min(scroll, std::max(0, static_cast<int>(matches.size()) - visible_rows)));
+        return;
+    }
+    reveal_selected_row(row, static_cast<int>(matches.size()), scroll, visible_rows);
+}
+
 void new_wall_preset(Game& game) {
     char name[32];
     std::snprintf(name, sizeof(name), "CLICK PRESET %d", static_cast<int>(game.wall_presets.size()) + 1);
@@ -410,20 +445,28 @@ void new_wall_preset(Game& game) {
 
 void delete_wall_preset(Game& game) {
     game.active_field = FieldId::None;
-    std::string removed;
-    if (game.selected_wall_preset >= 0 && game.selected_wall_preset < static_cast<int>(game.wall_presets.size())) {
-        removed = game.wall_presets[game.selected_wall_preset].name;
+    if (game.wall_presets.empty()) {
+        apply_selected_presets(game);
+        return;
     }
+    if (game.selected_wall_preset < 0 || game.selected_wall_preset >= static_cast<int>(game.wall_presets.size())) {
+        return;
+    }
+    std::string removed = game.wall_presets[game.selected_wall_preset].name;
+    std::vector<int> matches = matching_wall_presets(game);
+    int deleted_index = game.selected_wall_preset;
     if (game.wall_presets.size() <= 1) {
+        game.deleted_default_tasks.clear();
         game.wall_presets.clear();
         game.selected_wall_preset = 0;
     } else {
-        game.wall_presets.erase(game.wall_presets.begin() + game.selected_wall_preset);
-        game.selected_wall_preset = std::max(0, std::min(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()) - 1));
+        remember_deleted_default_task(game, removed);
+        game.wall_presets.erase(game.wall_presets.begin() + deleted_index);
+        game.selected_wall_preset = selection_after_delete(matches, deleted_index, static_cast<int>(game.wall_presets.size()));
     }
     remove_task_from_playlists(game, removed);
     apply_selected_presets(game);
-    reveal_selected_row(game.selected_wall_preset, static_cast<int>(game.wall_presets.size()), game.wall_preset_scroll, VISIBLE_PRESET_ROWS);
+    reveal_matching_row(game.selected_wall_preset, matching_wall_presets(game), game.wall_preset_scroll, VISIBLE_PRESET_ROWS);
 }
 
 void new_playlist(Game& game) {
@@ -449,8 +492,13 @@ void delete_playlist(Game& game) {
     if (game.playlists.empty()) {
         return;
     }
+    if (game.selected_playlist < 0 || game.selected_playlist >= static_cast<int>(game.playlists.size())) {
+        return;
+    }
     std::string removed = game.playlists[game.selected_playlist].name;
-    game.playlists.erase(game.playlists.begin() + game.selected_playlist);
+    std::vector<int> matches = matching_playlists(game);
+    int deleted_index = game.selected_playlist;
+    game.playlists.erase(game.playlists.begin() + deleted_index);
     if (game.playlist_paused && game.playlist_play_name == removed) {
         clear_playlist_session(game);
     }
@@ -462,9 +510,9 @@ void delete_playlist(Game& game) {
         game.playlist_scroll = 0;
         return;
     }
-    game.selected_playlist = std::max(0, std::min(game.selected_playlist, static_cast<int>(game.playlists.size()) - 1));
+    game.selected_playlist = selection_after_delete(matches, deleted_index, static_cast<int>(game.playlists.size()));
     apply_selected_playlist(game);
-    reveal_selected_row(game.selected_playlist, static_cast<int>(game.playlists.size()), game.playlist_scroll, VISIBLE_PLAYLIST_ROWS);
+    reveal_matching_row(game.selected_playlist, matching_playlists(game), game.playlist_scroll, VISIBLE_PLAYLIST_ROWS);
 }
 
 // ---------------------------------------------------------------------------
@@ -739,6 +787,7 @@ static void draw_preset_sidebar(Game& g, const Input& in, float x) {
     if (secondary_button(in, row_x + 128.0f, button_y, row_w - 128.0f, BTN_H, "Delete", BTN_SCALE)) {
         menu_blur_field(g);
         delete_wall_preset(g);
+        save_settings(g);
     }
     if (secondary_button(in, row_x, button_y + 32.0f, row_w, BTN_H, "Save preset", BTN_SCALE)) {
         menu_blur_field(g);
@@ -949,6 +998,7 @@ static void draw_playlist_sidebar(Game& g, const Input& in, float x) {
     if (secondary_button(in, row_x + 128.0f, button_y, row_w - 128.0f, BTN_H, "Delete", BTN_SCALE)) {
         menu_blur_field(g);
         delete_playlist(g);
+        save_settings(g);
     }
     if (secondary_button(in, row_x, button_y + 32.0f, row_w, BTN_H, "Save playlist", BTN_SCALE)) {
         menu_blur_field(g);
@@ -1094,6 +1144,7 @@ static void draw_playlists_tab(Game& g, const Input& in, float left) {
             int next_count = static_cast<int>(playlist->task_names.size());
             g.selected_playlist_entry = next_count > 0 ? std::min(g.selected_playlist_entry, next_count - 1) : 0;
             reveal_selected_row(g.selected_playlist_entry, next_count, g.playlist_entry_scroll, VISIBLE_PLAYLIST_ENTRY_ROWS);
+            save_settings(g);
         }
     }
 

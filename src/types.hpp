@@ -249,6 +249,9 @@ struct Game {
     int wall_preset_scroll = 0;
     std::string wall_preset_name = "1W3T DYNAMIC";
     std::string preset_search;
+    // Default-catalog names the user deleted. ensure_presets still injects newly
+    // added catalog tasks, but will not restore these until Reset tasks.
+    std::vector<std::string> deleted_default_tasks;
     std::vector<Playlist> playlists;
     int selected_playlist = 0;
     int playlist_scroll = 0;

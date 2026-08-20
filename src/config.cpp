@@ -189,9 +189,24 @@ static int wall_preset_index(const std::vector<WallPreset>& presets, const std::
     return -1;
 }
 
+static bool name_in_list(const std::vector<std::string>& names, const std::string& name) {
+    return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+void remember_deleted_default_task(Game& game, const std::string& name) {
+    if (name.empty() || name_in_list(game.deleted_default_tasks, name)) {
+        return;
+    }
+    if (wall_preset_index(default_wall_presets(), name) < 0) {
+        return;
+    }
+    game.deleted_default_tasks.push_back(name);
+}
+
 static void ensure_wall_presets(Game& game) {
     std::vector<WallPreset> defaults = default_wall_presets();
     if (game.wall_presets.empty()) {
+        game.deleted_default_tasks.clear();
         game.wall_presets = defaults;
         return;
     }
@@ -208,7 +223,7 @@ static void ensure_wall_presets(Game& game) {
         if (existing >= 0) {
             ordered.push_back(game.wall_presets[existing]);
             used[existing] = true;
-        } else {
+        } else if (!name_in_list(game.deleted_default_tasks, preset.name)) {
             ordered.push_back(preset);
         }
     }
@@ -594,6 +609,7 @@ void reset_wall_presets(Game& game) {
     }
     g_runtime_defaults = loaded;
     g_runtime_defaults_ready = true;
+    game.deleted_default_tasks.clear();
     game.wall_presets = loaded;
     game.selected_wall_preset = 0;
     game.wall_preset_scroll = 0;
@@ -720,7 +736,7 @@ void save_settings(const Game& game) {
     if (!out) {
         return;
     }
-    out << "version 18\n";
+    out << "version 19\n";
     out << "sensitivity " << normalized.sensitivity << "\n";
     out << "crosshair " << normalized.crosshair.length << " " << normalized.crosshair.gap << " "
         << normalized.crosshair.thickness << " "
@@ -757,6 +773,9 @@ void save_settings(const Game& game) {
             << preset.settings.bounce_camera_height_m << " "
             << preset.settings.bounce_gravity_m << " "
             << preset.settings.bounce_dir_change_p << "\n";
+    }
+    for (const std::string& name : normalized.deleted_default_tasks) {
+        out << "deleted_default " << std::quoted(name) << "\n";
     }
     for (const Playlist& playlist : normalized.playlists) {
         out << "playlist " << std::quoted(playlist.name);
@@ -818,6 +837,11 @@ void load_settings(Game& game) {
             row >> game.selected_wall_preset;
         } else if (key == "selected_playlist") {
             row >> game.selected_playlist;
+        } else if (key == "deleted_default") {
+            std::string name;
+            if (row >> std::quoted(name) && !name.empty() && !name_in_list(game.deleted_default_tasks, name)) {
+                game.deleted_default_tasks.push_back(name);
+            }
         } else if (key == "playlist") {
             Playlist playlist;
             if (row >> std::quoted(playlist.name)) {

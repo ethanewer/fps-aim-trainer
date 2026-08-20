@@ -27,6 +27,8 @@ In the menu:
   horizontally when they bounce off the floor. Both modes have a Health setting
   (`1` = one shot, `N` = N hits, `0` = infinite).
 - **Reset tasks** replaces every saved task with the list in `scripts/default-tasks.py`.
+- **Delete** on a task or playlist is saved immediately. Deleting a builtin task keeps it
+  gone until **Reset tasks**.
 - **Practice** starts an endless run; **Challenge** starts a timed 60-second run.
   Clicking an already-selected preset in the list also starts a challenge.
 - **New** copies the current selected/editor values in that tab.

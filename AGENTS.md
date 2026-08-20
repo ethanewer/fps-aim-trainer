@@ -221,7 +221,8 @@ alignment, overflow, and focus highlighting.
   The room/far-plane depth is sized to `wall_distance_max`.
 - **Settings file format is versioned.** If you change what `save_settings` writes, bump the
   `version` and add a migration branch to `load_settings`, then add a self-test that loads the old
-  format. Don't silently break existing `.cfg` files. (Current: `version 18`; v17 files
+  format. Don't silently break existing `.cfg` files. (Current: `version 19`; v18 files
+  without `deleted_default` lines still inject missing builtins; v17 files
   without bounce dir-change probability keep 0; v16 files
   without bounce gravity keep 9.81 m/s²; v15 files
   without bounce jump fields keep default angle/speed/camera; v14 Bounce 180
