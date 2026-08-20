@@ -239,7 +239,7 @@ alignment, overflow, and focus highlighting.
   wall, targets, movement, mode, and health. Clicking defaults are one-shot.
   Target-switching defaults are tracking copies of the dynamic/strafe clicking
   tasks (health 20 on dynamic, 10 on strafe). Tracking defaults are one small
-  dynamic target with infinite health. `BOUNCE 180` is a four-target clicking bounce
+  dynamic target with infinite health. `BOUNCE 180` is a six-target clicking bounce
   task. Clicking and switching currently use 3 targets on mid and close walls.
   A tracking task with one target and infinite health spawns at the center of the
   spawn rectangle; clicking and switching stay random.

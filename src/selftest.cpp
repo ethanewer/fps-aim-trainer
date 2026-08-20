@@ -82,6 +82,7 @@ int run_self_test() {
         "1W1TS DYNAMIC TRACKING",
         "1W1TS DYNAMIC TRACKING CLOSE",
         "BOUNCE 180",
+        "1W3EL STATIC FAR",
     };
     const int default_wall_count = static_cast<int>(sizeof(default_wall_order) / sizeof(default_wall_order[0]));
     ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking, switching, tracking, and bounce presets") && ok;
@@ -107,17 +108,20 @@ int run_self_test() {
     ok = self_test_check(switch_strafe_index >= 0 && game.wall_presets[switch_strafe_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_strafe_index].settings.target_health == 10 && std::fabs(game.wall_presets[switch_strafe_index].settings.vertical_speed_max) < 0.0001f, "strafe switching default uses 10 health") && ok;
     ok = self_test_check(track_index >= 0 && game.wall_presets[track_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[track_index].settings.target_health == 0 && game.wall_presets[track_index].settings.target_count_min == 1 && std::fabs(game.wall_presets[track_index].settings.radius_min - 0.04f) < 0.0001f, "tracking default is one small dynamic target with infinite health") && ok;
     int bounce_index = find_wall_preset(game, "BOUNCE 180");
-    ok = self_test_check(bounce_index >= 0 && game.wall_presets[bounce_index].settings.bounce && game.wall_presets[bounce_index].settings.target_count_min == 4 && std::fabs(game.wall_presets[bounce_index].settings.radius_min - 0.08f) < 0.0001f, "bounce 180 default is a four-ball clicking task with normal radius") && ok;
+    ok = self_test_check(bounce_index >= 0 && game.wall_presets[bounce_index].settings.bounce && game.wall_presets[bounce_index].settings.target_count_min == 6 && std::fabs(game.wall_presets[bounce_index].settings.radius_min - 0.08f) < 0.0001f, "bounce 180 default is a six-ball clicking task with normal radius") && ok;
     ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_min - 30.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_max - 75.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_max - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_camera_height_m - 0.25f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_gravity_m - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_dir_change_p - 0.0f) < 0.0001f, "bounce 180 default jump angle, takeoff speed, camera height, gravity, and dir-change probability are set") && ok;
     ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_max - 10.0f) < 0.0001f, "bounce 180 default uses the same 8-10m range as 1W3T DYNAMIC") && ok;
+    int far_xl_index = find_wall_preset(game, "1W3EL STATIC FAR");
+    ok = self_test_check(far_xl_index >= 0 && game.wall_presets[far_xl_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[far_xl_index].settings.radius_min - 0.32f) < 0.0001f && game.wall_presets[far_xl_index].settings.horizontal_speed_max == 0.0f && std::fabs(game.wall_presets[far_xl_index].settings.wall_distance_min - 16.0f) < 0.0001f && std::fabs(game.wall_presets[far_xl_index].settings.wall_distance_max - 20.0f) < 0.0001f, "extra-large far static default uses 0.32m balls at 16-20m") && ok;
     for (const WallPreset& preset : game.wall_presets) {
         if (preset.settings.bounce) {
             continue;
         }
         bool close_wall = preset.name.size() >= 6 && preset.name.compare(preset.name.size() - 6, 6, " CLOSE") == 0;
-        float expected_min = close_wall ? 4.0f : 8.0f;
-        float expected_max = close_wall ? 5.0f : 10.0f;
-        ok = self_test_check(std::fabs(preset.settings.wall_distance_min - expected_min) < 0.0001f && std::fabs(preset.settings.wall_distance_max - expected_max) < 0.0001f, "default wall presets use mid 8-10m or close 4-5m ranges") && ok;
+        bool far_wall = preset.name.size() >= 4 && preset.name.compare(preset.name.size() - 4, 4, " FAR") == 0;
+        float expected_min = close_wall ? 4.0f : (far_wall ? 16.0f : 8.0f);
+        float expected_max = close_wall ? 5.0f : (far_wall ? 20.0f : 10.0f);
+        ok = self_test_check(std::fabs(preset.settings.wall_distance_min - expected_min) < 0.0001f && std::fabs(preset.settings.wall_distance_max - expected_max) < 0.0001f, "default wall presets use mid 8-10m, close 4-5m, or far 16-20m ranges") && ok;
     }
 
     Game preset_order;
@@ -362,7 +366,7 @@ int run_self_test() {
         reset_test.wall_preset_scroll = 1;
         reset_test.active_field = FieldId::WallName;
         reset_wall_presets(reset_test);
-        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 27 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
+        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 28 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
         ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W3T DYNAMIC", "reset tasks selects the first default task") && ok;
         ok = self_test_check(std::fabs(reset_test.wall_settings.radius_min - 0.08f) < 0.0001f && std::fabs(reset_test.wall_settings.horizontal_speed_max - 1.5f) < 0.0001f, "reset tasks restores compiled default settings") && ok;
         ok = self_test_check(reset_test.active_field == FieldId::None, "reset tasks exits text edit mode") && ok;

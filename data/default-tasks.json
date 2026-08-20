@@ -238,8 +238,17 @@
       "name": "BOUNCE 180",
       "size": "normal",
       "wall": "mid",
-      "targets": 4,
+      "targets": 6,
       "movement": "bounce",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3EL STATIC FAR",
+      "size": "extra_large",
+      "wall": "far",
+      "targets": 3,
+      "movement": "static",
       "mode": "clicking",
       "health": 1
     }

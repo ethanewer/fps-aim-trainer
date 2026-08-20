@@ -27,6 +27,8 @@ from default_tasks import (
 )
 
 # Sizes: radius in meters. Suffix is the token in the generated name (T / TS / TES).
+EXTRA_LARGE = size("extra_large", 0.32, "EL")
+LARGE = size("large", 0.16, "L")
 NORMAL = size("normal", 0.08, "T")
 SMALL = size("small", 0.04, "TS")
 EXTRA_SMALL = size("extra_small", 0.02, "TES")
@@ -34,7 +36,7 @@ EXTRA_SMALL = size("extra_small", 0.02, "TES")
 # Walls: spawn-distance range in meters. Mid is omitted from the preset name.
 CLOSE = wall("close", 4, 5)
 MID = wall("mid", 8, 10, named=False)
-FAR = wall("far", 12, 15)
+FAR = wall("far", 16, 20)
 
 # Movement: h/v speed (m/s), accel (m/s²), dir-change interval (s).
 STATIC = movement("static", h=0, v=0, accel=0, dir_change=0)
@@ -88,7 +90,8 @@ DEFAULT_TASKS = [
         mode=TRACKING,
         health=0,
     ),
-    Task(name="BOUNCE 180", size=NORMAL, targets=4, movement=BOUNCE, wall=MID),
+    Task(name="BOUNCE 180", size=NORMAL, targets=6, movement=BOUNCE, wall=MID),
+    Task(size=EXTRA_LARGE, targets=3, movement=STATIC, wall=FAR),
 ]
 
 
