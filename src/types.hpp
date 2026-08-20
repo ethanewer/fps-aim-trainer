@@ -247,7 +247,7 @@ struct Game {
     std::vector<WallPreset> wall_presets;
     int selected_wall_preset = 0;
     int wall_preset_scroll = 0;
-    std::string wall_preset_name = "1W2T DYNAMIC";
+    std::string wall_preset_name = "1W3T DYNAMIC";
     std::string preset_search;
     std::vector<Playlist> playlists;
     int selected_playlist = 0;

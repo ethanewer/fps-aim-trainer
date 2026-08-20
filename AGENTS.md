@@ -54,6 +54,8 @@ downward (upper modules may include lower ones, not vice-versa):
 | `src/world.{hpp,cpp}` | Meters↔units conversions, room/wall/tracking geometry, camera, RNG, far-plane. |
 | `src/config.{hpp,cpp}` | Settings normalization/clamping, presets, and `.cfg` save/load + migration. |
 | `src/default_tasks.inc` | Generated default-task table (from `scripts/default-tasks.py`). |
+| `scripts/default-tasks.py` | Default-task catalog (edit this to add or change builtins). |
+| `scripts/default_tasks.py` | Catalog plumbing: `size`/`wall`/`movement` factories, JSON, C++, `--dump`. |
 | `data/default-tasks.json` | Human-readable default-task definitions. |
 | `src/scenario.{hpp,cpp}` | Target spawning, movement physics, and scenario simulation. |
 | `src/render.{hpp,cpp}` | 2D primitives, 3D world, in-scenario HUD. |
@@ -232,18 +234,22 @@ alignment, overflow, and focus highlighting.
   migrate to an 8-10m wall range; v8 clicking presets with unused health 0 migrate to one-shot
   health 1; v7 wall presets migrate to clicking with health 1; v4 single wall distance migrates
   to a min==max range. Leftover `pill_preset` lines are ignored.)
-  Default tasks live in `data/default-tasks.json` as size, wall (`close` / `mid` / `far`),
-  a fixed target count, movement (`static` / `strafing` / `dynamic` / `bounce`), mode, and health.
-  Clicking defaults are one-shot. Target-switching defaults are tracking copies of the
-  dynamic/strafe clicking tasks (health 20 on dynamic, 10 on strafe). Tracking defaults
-  are one small dynamic target with infinite health. `THE BOUNCE 180` is a four-target
-  clicking bounce task with a 0.08 m ball, 8-10 m spawn range, 30-75° jump angle,
-  4-6 m/s takeoff speed, camera height 0.25 m, and gravity 6 m/s². A tracking task with one target
-  and infinite health spawns at the center of the spawn rectangle; clicking and
-  switching stay random.
+  Default tasks live in `scripts/default-tasks.py`. That file also defines size radii,
+  wall distances, movement speeds/accel/dir-change, and bounce physics. A task is size,
+  wall, targets, movement, mode, and health. Clicking defaults are one-shot.
+  Target-switching defaults are tracking copies of the dynamic/strafe clicking
+  tasks (health 20 on dynamic, 10 on strafe). Tracking defaults are one small
+  dynamic target with infinite health. `BOUNCE 180` is a four-target clicking bounce
+  task. Clicking and switching currently use 3 targets on mid and close walls.
+  A tracking task with one target and infinite health spawns at the center of the
+  spawn rectangle; clicking and switching stay random.
   Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`;
   switching names include `SWITCHING` and the health value; tracking names include
   `TRACKING`.
+  Generation plumbing (`size()` / `wall()` / `movement()` / `bounce_defaults()` /
+  `tasks()`, JSON, C++, `--dump`) lives in `scripts/default_tasks.py`. A catalog
+  task can override radius, wall range, speeds, accel, dir-change, and bounce
+  physics when the named defaults are not enough.
   Edit `scripts/default-tasks.py` and click **Reset tasks** to re-run that script and
   replace every saved preset. The dumped list becomes the live builtin table for that
   session, so target-count edits (which change preset names) are not overwritten by the

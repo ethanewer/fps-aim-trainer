@@ -55,61 +55,61 @@ int run_self_test() {
     };
 
     const char* default_wall_order[] = {
-        "1W2T DYNAMIC",
-        "1W2TS DYNAMIC",
-        "1W2T STRAFE",
-        "1W2TS STRAFE",
-        "1W2T STATIC",
-        "1W2TS STATIC",
-        "1W2TES STATIC",
-        "1W4T DYNAMIC CLOSE",
-        "1W4TS DYNAMIC CLOSE",
-        "1W4T STRAFE CLOSE",
-        "1W4TS STRAFE CLOSE",
-        "1W4TES STRAFE CLOSE",
-        "1W4T STATIC CLOSE",
-        "1W4TS STATIC CLOSE",
-        "1W4TES STATIC CLOSE",
-        "1W2T DYNAMIC SWITCHING 20",
-        "1W2TS DYNAMIC SWITCHING 20",
-        "1W2T STRAFE SWITCHING 10",
-        "1W2TS STRAFE SWITCHING 10",
-        "1W4T DYNAMIC SWITCHING 20 CLOSE",
-        "1W4TS DYNAMIC SWITCHING 20 CLOSE",
-        "1W4T STRAFE SWITCHING 10 CLOSE",
-        "1W4TS STRAFE SWITCHING 10 CLOSE",
-        "1W4TES STRAFE SWITCHING 10 CLOSE",
+        "1W3T DYNAMIC",
+        "1W3TS DYNAMIC",
+        "1W3T STRAFE",
+        "1W3TS STRAFE",
+        "1W3T STATIC",
+        "1W3TS STATIC",
+        "1W3TES STATIC",
+        "1W3T DYNAMIC CLOSE",
+        "1W3TS DYNAMIC CLOSE",
+        "1W3T STRAFE CLOSE",
+        "1W3TS STRAFE CLOSE",
+        "1W3TES STRAFE CLOSE",
+        "1W3T STATIC CLOSE",
+        "1W3TS STATIC CLOSE",
+        "1W3TES STATIC CLOSE",
+        "1W3T DYNAMIC SWITCHING 20",
+        "1W3TS DYNAMIC SWITCHING 20",
+        "1W3T STRAFE SWITCHING 10",
+        "1W3TS STRAFE SWITCHING 10",
+        "1W3T DYNAMIC SWITCHING 20 CLOSE",
+        "1W3TS DYNAMIC SWITCHING 20 CLOSE",
+        "1W3T STRAFE SWITCHING 10 CLOSE",
+        "1W3TS STRAFE SWITCHING 10 CLOSE",
+        "1W3TES STRAFE SWITCHING 10 CLOSE",
         "1W1TS DYNAMIC TRACKING",
         "1W1TS DYNAMIC TRACKING CLOSE",
-        "THE BOUNCE 180",
+        "BOUNCE 180",
     };
     const int default_wall_count = static_cast<int>(sizeof(default_wall_order) / sizeof(default_wall_order[0]));
     ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking, switching, tracking, and bounce presets") && ok;
     for (int i = 0; i < default_wall_count && i < static_cast<int>(game.wall_presets.size()); ++i) {
         ok = self_test_check(game.wall_presets[i].name == default_wall_order[i], "default wall presets are in sensible order") && ok;
     }
-    int dynamic_index = find_wall_preset(game, "1W2T DYNAMIC");
-    int dynamic_small_index = find_wall_preset(game, "1W2TS DYNAMIC");
-    int strafe_small_index = find_wall_preset(game, "1W2TS STRAFE");
-    int static_index = find_wall_preset(game, "1W2T STATIC");
-    int static_extra_index = find_wall_preset(game, "1W2TES STATIC");
-    int close_index = find_wall_preset(game, "1W4T DYNAMIC CLOSE");
-    ok = self_test_check(dynamic_index >= 0 && game.wall_presets[dynamic_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[dynamic_index].settings.radius_min - 0.08f) < 0.0001f && std::fabs(game.wall_presets[dynamic_index].settings.horizontal_speed_max - 1.5f) < 0.0001f && std::fabs(game.wall_presets[dynamic_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "dynamic default uses 1W2T settings") && ok;
+    int dynamic_index = find_wall_preset(game, "1W3T DYNAMIC");
+    int dynamic_small_index = find_wall_preset(game, "1W3TS DYNAMIC");
+    int strafe_small_index = find_wall_preset(game, "1W3TS STRAFE");
+    int static_index = find_wall_preset(game, "1W3T STATIC");
+    int static_extra_index = find_wall_preset(game, "1W3TES STATIC");
+    int close_index = find_wall_preset(game, "1W3T DYNAMIC CLOSE");
+    ok = self_test_check(dynamic_index >= 0 && game.wall_presets[dynamic_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[dynamic_index].settings.radius_min - 0.08f) < 0.0001f && std::fabs(game.wall_presets[dynamic_index].settings.horizontal_speed_max - 1.5f) < 0.0001f && std::fabs(game.wall_presets[dynamic_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "dynamic default uses 1W3T settings") && ok;
     ok = self_test_check(dynamic_small_index >= 0 && std::fabs(game.wall_presets[dynamic_small_index].settings.radius_min - 0.04f) < 0.0001f, "dynamic small default uses small target size") && ok;
-    ok = self_test_check(strafe_small_index >= 0 && game.wall_presets[strafe_small_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[strafe_small_index].settings.radius_min - 0.04f) < 0.0001f && std::fabs(game.wall_presets[strafe_small_index].settings.horizontal_speed_min - 1.0f) < 0.0001f && std::fabs(game.wall_presets[strafe_small_index].settings.change_max - 4.0f) < 0.0001f, "strafe small default uses small targets") && ok;
-    ok = self_test_check(static_index >= 0 && game.wall_presets[static_index].settings.target_count_min == 2 && game.wall_presets[static_index].settings.horizontal_speed_max == 0.0f, "static 1W2T default is non-moving") && ok;
-    ok = self_test_check(static_extra_index >= 0 && game.wall_presets[static_extra_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[static_extra_index].settings.radius_min - 0.02f) < 0.0001f && game.wall_presets[static_extra_index].settings.horizontal_speed_max == 0.0f, "static 1W2TES default is non-moving extra-small") && ok;
+    ok = self_test_check(strafe_small_index >= 0 && game.wall_presets[strafe_small_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[strafe_small_index].settings.radius_min - 0.04f) < 0.0001f && std::fabs(game.wall_presets[strafe_small_index].settings.horizontal_speed_min - 1.0f) < 0.0001f && std::fabs(game.wall_presets[strafe_small_index].settings.change_max - 4.0f) < 0.0001f, "strafe small default uses small targets") && ok;
+    ok = self_test_check(static_index >= 0 && game.wall_presets[static_index].settings.target_count_min == 3 && game.wall_presets[static_index].settings.horizontal_speed_max == 0.0f, "static 1W3T default is non-moving") && ok;
+    ok = self_test_check(static_extra_index >= 0 && game.wall_presets[static_extra_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[static_extra_index].settings.radius_min - 0.02f) < 0.0001f && game.wall_presets[static_extra_index].settings.horizontal_speed_max == 0.0f, "static 1W3TES default is non-moving extra-small") && ok;
     ok = self_test_check(close_index >= 0 && std::fabs(game.wall_presets[close_index].settings.wall_distance_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[close_index].settings.wall_distance_max - 5.0f) < 0.0001f, "close default uses a 4-5m wall range") && ok;
-    int switch_index = find_wall_preset(game, "1W2T DYNAMIC SWITCHING 20");
-    int switch_strafe_index = find_wall_preset(game, "1W2T STRAFE SWITCHING 10");
+    int switch_index = find_wall_preset(game, "1W3T DYNAMIC SWITCHING 20");
+    int switch_strafe_index = find_wall_preset(game, "1W3T STRAFE SWITCHING 10");
     int track_index = find_wall_preset(game, "1W1TS DYNAMIC TRACKING");
-    ok = self_test_check(switch_index >= 0 && game.wall_presets[switch_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_index].settings.target_health == 20 && game.wall_presets[switch_index].settings.target_count_min == 2 && std::fabs(game.wall_presets[switch_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "target-switching default copies dynamic clicking motion with 20 health") && ok;
+    ok = self_test_check(switch_index >= 0 && game.wall_presets[switch_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_index].settings.target_health == 20 && game.wall_presets[switch_index].settings.target_count_min == 3 && std::fabs(game.wall_presets[switch_index].settings.vertical_speed_max - 0.75f) < 0.0001f, "target-switching default copies dynamic clicking motion with 20 health") && ok;
     ok = self_test_check(switch_strafe_index >= 0 && game.wall_presets[switch_strafe_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[switch_strafe_index].settings.target_health == 10 && std::fabs(game.wall_presets[switch_strafe_index].settings.vertical_speed_max) < 0.0001f, "strafe switching default uses 10 health") && ok;
     ok = self_test_check(track_index >= 0 && game.wall_presets[track_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[track_index].settings.target_health == 0 && game.wall_presets[track_index].settings.target_count_min == 1 && std::fabs(game.wall_presets[track_index].settings.radius_min - 0.04f) < 0.0001f, "tracking default is one small dynamic target with infinite health") && ok;
-    int bounce_index = find_wall_preset(game, "THE BOUNCE 180");
+    int bounce_index = find_wall_preset(game, "BOUNCE 180");
     ok = self_test_check(bounce_index >= 0 && game.wall_presets[bounce_index].settings.bounce && game.wall_presets[bounce_index].settings.target_count_min == 4 && std::fabs(game.wall_presets[bounce_index].settings.radius_min - 0.08f) < 0.0001f, "bounce 180 default is a four-ball clicking task with normal radius") && ok;
     ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_min - 30.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_max - 75.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_max - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_camera_height_m - 0.25f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_gravity_m - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_dir_change_p - 0.0f) < 0.0001f, "bounce 180 default jump angle, takeoff speed, camera height, gravity, and dir-change probability are set") && ok;
-    ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_max - 10.0f) < 0.0001f, "bounce 180 default uses the same 8-10m range as 1W2T DYNAMIC") && ok;
+    ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_max - 10.0f) < 0.0001f, "bounce 180 default uses the same 8-10m range as 1W3T DYNAMIC") && ok;
     for (const WallPreset& preset : game.wall_presets) {
         if (preset.settings.bounce) {
             continue;
@@ -124,7 +124,7 @@ int run_self_test() {
     preset_order.wall_presets = {
         {"CUSTOM", WallClickSettings{}},
         {"1W6T STRAFE", WallClickSettings{}},
-        {"1W2T DYNAMIC", WallClickSettings{}},
+        {"1W3T DYNAMIC", WallClickSettings{}},
     };
     preset_order.selected_wall_preset = 2;
     preset_order.wall_presets[1].settings.radius_min = 0.12f;
@@ -132,10 +132,10 @@ int run_self_test() {
     preset_order.wall_presets[2].settings.radius_min = 0.13f;
     preset_order.wall_presets[2].settings.radius_max = 0.13f;
     ensure_presets(preset_order);
-    ok = self_test_check(preset_order.wall_presets[0].name == "1W2T DYNAMIC" && preset_order.wall_presets[1].name == "1W2TS DYNAMIC", "existing built-in wall presets are reordered with defaults") && ok;
+    ok = self_test_check(preset_order.wall_presets[0].name == "1W3T DYNAMIC" && preset_order.wall_presets[1].name == "1W3TS DYNAMIC", "existing built-in wall presets are reordered with defaults") && ok;
     ok = self_test_check(static_cast<int>(preset_order.wall_presets.size()) >= 3 && preset_order.wall_presets[preset_order.wall_presets.size() - 2].name == "CUSTOM" && preset_order.wall_presets.back().name == "1W6T STRAFE", "custom and unknown wall presets remain after built-in defaults") && ok;
     ok = self_test_check(std::fabs(preset_order.wall_presets[find_wall_preset(preset_order, "1W6T STRAFE")].settings.radius_min - 0.12f) < 0.0001f, "reordering preserves existing strafe preset settings") && ok;
-    ok = self_test_check(preset_order.wall_presets[preset_order.selected_wall_preset].name == "1W2T DYNAMIC" && preset_order.wall_presets[preset_order.selected_wall_preset].settings.target_count_min == 3 && std::fabs(preset_order.wall_presets[preset_order.selected_wall_preset].settings.radius_min - 0.13f) < 0.0001f, "reordering preserves selected built-in preset settings") && ok;
+    ok = self_test_check(preset_order.wall_presets[preset_order.selected_wall_preset].name == "1W3T DYNAMIC" && preset_order.wall_presets[preset_order.selected_wall_preset].settings.target_count_min == 3 && std::fabs(preset_order.wall_presets[preset_order.selected_wall_preset].settings.radius_min - 0.13f) < 0.0001f, "reordering preserves selected built-in preset settings") && ok;
 
     // Name field editing through the draft-based text-box model.
     menu_focus_field(game, FieldId::WallName);
@@ -347,7 +347,7 @@ int run_self_test() {
     game.selected_wall_preset = 0;
     game.active_field = FieldId::WallName;
     delete_wall_preset(game);
-    ok = self_test_check(!game.wall_presets.empty() && game.wall_presets[0].name == "1W2T DYNAMIC" && find_wall_preset(game, "1W2TES STATIC") >= 0, "deleting the last wall preset restores default wall presets") && ok;
+    ok = self_test_check(!game.wall_presets.empty() && game.wall_presets[0].name == "1W3T DYNAMIC" && find_wall_preset(game, "1W3TES STATIC") >= 0, "deleting the last wall preset restores default wall presets") && ok;
     ok = self_test_check(game.active_field == FieldId::None, "delete wall preset exits text edit mode") && ok;
 
     {
@@ -363,7 +363,7 @@ int run_self_test() {
         reset_test.active_field = FieldId::WallName;
         reset_wall_presets(reset_test);
         ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 27 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
-        ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W2T DYNAMIC", "reset tasks selects the first default task") && ok;
+        ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W3T DYNAMIC", "reset tasks selects the first default task") && ok;
         ok = self_test_check(std::fabs(reset_test.wall_settings.radius_min - 0.08f) < 0.0001f && std::fabs(reset_test.wall_settings.horizontal_speed_max - 1.5f) < 0.0001f, "reset tasks restores compiled default settings") && ok;
         ok = self_test_check(reset_test.active_field == FieldId::None, "reset tasks exits text edit mode") && ok;
     }
@@ -379,7 +379,7 @@ int run_self_test() {
         reset_wall_presets(live);
         ensure_presets(live);
         ok = self_test_check(live.wall_presets.size() == 1 && live.wall_preset_name == "LIVE RESET", "reset tasks loads dumped default tasks") && ok;
-        ok = self_test_check(find_wall_preset(live, "1W2T DYNAMIC") < 0 && find_wall_preset(live, "1W4T DYNAMIC") < 0, "reset tasks does not re-inject compiled defaults after a live dump") && ok;
+        ok = self_test_check(find_wall_preset(live, "1W3T DYNAMIC") < 0 && find_wall_preset(live, "1W4T DYNAMIC") < 0, "reset tasks does not re-inject compiled defaults after a live dump") && ok;
         ok = self_test_check(live.wall_settings.target_count_min == 4 && live.wall_settings.target_health == 7, "reset tasks applies dumped target count and health") && ok;
         ok = self_test_check(std::fabs(live.wall_settings.wall_distance_min - 4.0f) < 0.0001f && std::fabs(live.wall_settings.horizontal_speed_min - 7.5f) < 0.0001f, "reset tasks applies dumped wall and speed values") && ok;
         g_default_tasks_dump_override.clear();
@@ -747,7 +747,7 @@ int run_self_test() {
         Game playlist_save;
         ensure_presets(playlist_save);
         playlist_save.playlists = {
-            {"WARMUP", {"1W2T DYNAMIC", "1W2T STRAFE", "MISSING TASK"}},
+            {"WARMUP", {"1W3T DYNAMIC", "1W3T STRAFE", "MISSING TASK"}},
             {"TRACK SET", {"1W1TS DYNAMIC TRACKING"}},
         };
         playlist_save.selected_playlist = 1;
@@ -755,32 +755,32 @@ int run_self_test() {
         Game playlist_loaded;
         load_settings(playlist_loaded);
         ok = self_test_check(static_cast<int>(playlist_loaded.playlists.size()) == 2, "v11 playlists round-trip") && ok;
-        ok = self_test_check(playlist_loaded.playlists[0].name == "WARMUP" && playlist_loaded.playlists[0].task_names.size() == 2 && playlist_loaded.playlists[0].task_names[0] == "1W2T DYNAMIC" && playlist_loaded.playlists[0].task_names[1] == "1W2T STRAFE", "missing playlist tasks are dropped and kept tasks load in order") && ok;
+        ok = self_test_check(playlist_loaded.playlists[0].name == "WARMUP" && playlist_loaded.playlists[0].task_names.size() == 2 && playlist_loaded.playlists[0].task_names[0] == "1W3T DYNAMIC" && playlist_loaded.playlists[0].task_names[1] == "1W3T STRAFE", "missing playlist tasks are dropped and kept tasks load in order") && ok;
         ok = self_test_check(playlist_loaded.selected_playlist == 1 && playlist_loaded.playlist_name == "TRACK SET", "selected playlist loads into the editor") && ok;
     }
 
     {
         Game rename_pl;
         ensure_presets(rename_pl);
-        rename_pl.playlists = {{"WARMUP", {"1W2T DYNAMIC", "1W2T STRAFE"}}};
-        int renamed = find_wall_preset(rename_pl, "1W2T DYNAMIC");
+        rename_pl.playlists = {{"WARMUP", {"1W3T DYNAMIC", "1W3T STRAFE"}}};
+        int renamed = find_wall_preset(rename_pl, "1W3T DYNAMIC");
         ok = self_test_check(renamed >= 0, "rename test finds the dynamic preset") && ok;
         rename_pl.selected_wall_preset = renamed;
         apply_selected_presets(rename_pl);
         rename_pl.wall_preset_name = "RENAMED TASK";
         save_current_wall_preset(rename_pl);
-        ok = self_test_check(rename_pl.playlists[0].task_names[0] == "RENAMED TASK" && rename_pl.playlists[0].task_names[1] == "1W2T STRAFE", "renaming a task updates playlist entries") && ok;
+        ok = self_test_check(rename_pl.playlists[0].task_names[0] == "RENAMED TASK" && rename_pl.playlists[0].task_names[1] == "1W3T STRAFE", "renaming a task updates playlist entries") && ok;
     }
 
     {
         Game delete_pl;
         ensure_presets(delete_pl);
         delete_pl.wall_presets.push_back({"MY TASK", WallClickSettings{}});
-        delete_pl.playlists = {{"WARMUP", {"MY TASK", "1W2T DYNAMIC"}}};
+        delete_pl.playlists = {{"WARMUP", {"MY TASK", "1W3T DYNAMIC"}}};
         delete_pl.selected_wall_preset = static_cast<int>(delete_pl.wall_presets.size()) - 1;
         apply_selected_presets(delete_pl);
         delete_wall_preset(delete_pl);
-        ok = self_test_check(delete_pl.playlists[0].task_names.size() == 1 && delete_pl.playlists[0].task_names[0] == "1W2T DYNAMIC", "deleting a task drops matching playlist entries") && ok;
+        ok = self_test_check(delete_pl.playlists[0].task_names.size() == 1 && delete_pl.playlists[0].task_names[0] == "1W3T DYNAMIC", "deleting a task drops matching playlist entries") && ok;
     }
 
     {
@@ -1873,13 +1873,13 @@ int run_self_test() {
         pl.rng.seed(3);
         ensure_presets(pl);
         init_scenarios(pl);
-        int first = find_wall_preset(pl, "1W2T DYNAMIC");
-        int second = find_wall_preset(pl, "1W2T STRAFE");
+        int first = find_wall_preset(pl, "1W3T DYNAMIC");
+        int second = find_wall_preset(pl, "1W3T STRAFE");
         ok = self_test_check(first >= 0 && second >= 0, "playlist play test finds two default tasks") && ok;
         pl.playlists = {{"WARMUP", {pl.wall_presets[first].name, pl.wall_presets[second].name}}};
         pl.selected_playlist = 0;
         ok = self_test_check(start_playlist(pl), "start_playlist begins the first task") && ok;
-        ok = self_test_check(pl.mode == AppMode::Playing && pl.run_mode == RunMode::Challenge && pl.wall_preset_name == "1W2T DYNAMIC", "playlist starts a challenge on the first task") && ok;
+        ok = self_test_check(pl.mode == AppMode::Playing && pl.run_mode == RunMode::Challenge && pl.wall_preset_name == "1W3T DYNAMIC", "playlist starts a challenge on the first task") && ok;
         ok = self_test_check(pl.playlist_active && !pl.playlist_complete && pl.playlist_play_index == 0, "playlist session tracks the first task") && ok;
 
         Input none;
@@ -1889,7 +1889,7 @@ int run_self_test() {
         ok = self_test_check(static_cast<int>(pl.playlist_session_runs.size()) == 1, "first playlist task is recorded in the session") && ok;
 
         handle_results_continue(pl);
-        ok = self_test_check(pl.mode == AppMode::Playing && pl.wall_preset_name == "1W2T STRAFE" && pl.playlist_play_index == 1, "continuing a playlist starts the next task") && ok;
+        ok = self_test_check(pl.mode == AppMode::Playing && pl.wall_preset_name == "1W3T STRAFE" && pl.playlist_play_index == 1, "continuing a playlist starts the next task") && ok;
 
         pl.challenge_time_left = 0.0f;
         update_playing(pl, none, 1.0f / 120.0f);
@@ -1913,7 +1913,7 @@ int run_self_test() {
         ok = self_test_check(mid.playlist_play_index == 1 && static_cast<int>(mid.playlist_session_runs.size()) == 1, "esc from mid-playlist results keeps the finished task and advances to the next") && ok;
         ok = self_test_check(playlist_can_resume(mid), "esc mid-playlist leaves a resumable session") && ok;
         ok = self_test_check(resume_playlist(mid), "resume_playlist starts the unfinished task") && ok;
-        ok = self_test_check(mid.mode == AppMode::Playing && mid.wall_preset_name == "1W2T STRAFE" && mid.playlist_play_index == 1, "resume continues from the next playlist task") && ok;
+        ok = self_test_check(mid.mode == AppMode::Playing && mid.wall_preset_name == "1W3T STRAFE" && mid.playlist_play_index == 1, "resume continues from the next playlist task") && ok;
         ok = self_test_check(static_cast<int>(mid.playlist_session_runs.size()) == 1 && !mid.playlist_paused, "resume keeps prior session scores") && ok;
 
         Game from_task;
@@ -1923,7 +1923,7 @@ int run_self_test() {
         from_task.playlists = {{"WARMUP", {from_task.wall_presets[first].name, from_task.wall_presets[second].name}}};
         from_task.selected_playlist = 0;
         ok = self_test_check(start_playlist(from_task, 1), "start_playlist can begin at a later entry") && ok;
-        ok = self_test_check(from_task.mode == AppMode::Playing && from_task.wall_preset_name == "1W2T STRAFE" && from_task.playlist_play_index == 1, "playing from a later entry starts that task") && ok;
+        ok = self_test_check(from_task.mode == AppMode::Playing && from_task.wall_preset_name == "1W3T STRAFE" && from_task.playlist_play_index == 1, "playing from a later entry starts that task") && ok;
 
         Game abort_task;
         abort_task.rng.seed(6);
@@ -1934,7 +1934,7 @@ int run_self_test() {
         start_playlist(abort_task);
         abort_to_menu(abort_task);
         ok = self_test_check(abort_task.playlist_paused && abort_task.playlist_play_index == 0 && abort_task.playlist_session_runs.empty(), "esc during a playlist task pauses on that unfinished task") && ok;
-        ok = self_test_check(resume_playlist(abort_task) && abort_task.mode == AppMode::Playing && abort_task.wall_preset_name == "1W2T DYNAMIC", "resume after esc during a task restarts that task") && ok;
+        ok = self_test_check(resume_playlist(abort_task) && abort_task.mode == AppMode::Playing && abort_task.wall_preset_name == "1W3T DYNAMIC", "resume after esc during a task restarts that task") && ok;
         abort_to_menu(abort_task);
         ok = self_test_check(start_playlist(abort_task, 0) && abort_task.playlist_play_index == 0 && abort_task.playlist_session_runs.empty() && !abort_task.playlist_paused, "play starts the playlist from the beginning and clears a pause") && ok;
 

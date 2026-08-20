@@ -269,7 +269,7 @@ static bool render_debug_shot(int scenario_index, const std::string& path, int w
         float even = 8.0f;
         game.wall_settings.wall_distance_min = even;
         game.wall_settings.wall_distance_max = 10.0f;
-        game.wall_preset_name = "THE BOUNCE 180";
+        game.wall_preset_name = "BOUNCE 180";
         game.target_color = {255, 70, 85};
         normalize_settings(game);
     }
@@ -461,7 +461,7 @@ static bool render_debug_menu(const std::string& path, int width, int height, in
             game.edit_fresh = false;
         } else if (state_index == 8) {
             for (int i = 0; i < static_cast<int>(game.wall_presets.size()); ++i) {
-                if (game.wall_presets[i].name == "THE BOUNCE 180") {
+                if (game.wall_presets[i].name == "BOUNCE 180") {
                     game.selected_wall_preset = i;
                     game.wall_preset_scroll = std::max(0, i - VISIBLE_PRESET_ROWS + 1);
                     apply_selected_presets(game);
