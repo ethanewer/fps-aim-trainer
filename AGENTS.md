@@ -241,12 +241,13 @@ alignment, overflow, and focus highlighting.
   Target-switching defaults are tracking copies of the dynamic/strafe clicking
   tasks (health 20 on dynamic, 10 on strafe). Tracking defaults are one small
   dynamic target with infinite health. `BOUNCE 180` is a six-target clicking bounce
-  task. Clicking and switching currently use 3 targets on mid and close walls.
+  task, and `BOUNCE 180 SWITCHING 40` is its six-target tracking copy with 40 health.
+  Clicking and switching currently use 3 targets on mid, close, and far walls.
   A tracking task with one target and infinite health spawns at the center of the
   spawn rectangle; clicking and switching stay random.
   Mid wall is omitted from the preset name; close and far append `CLOSE` or `FAR`;
   switching names include `SWITCHING` and the health value; tracking names include
-  `TRACKING`.
+  `TRACKING`. Preset names may be up to 50 characters (`PRESET_NAME_MAX`).
   Generation plumbing (`size()` / `wall()` / `movement()` / `bounce_defaults()` /
   `tasks()`, JSON, C++, `--dump`) lives in `scripts/default_tasks.py`. A catalog
   task can override radius, wall range, speeds, accel, dir-change, and bounce

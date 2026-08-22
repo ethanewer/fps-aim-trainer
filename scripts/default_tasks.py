@@ -716,9 +716,9 @@ def write_outputs(
     names = [item.preset_name for item in task_list]
     if len(names) != len(set(names)):
         raise ValueError("default task names must be unique")
-    too_long = [name for name in names if len(name) > 32]
+    too_long = [name for name in names if len(name) > 50]
     if too_long:
-        raise ValueError("default task names exceed 32 characters: " + ", ".join(too_long))
+        raise ValueError("default task names exceed 50 characters: " + ", ".join(too_long))
     if write_json:
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(_compact_json(task_list), encoding="utf-8")

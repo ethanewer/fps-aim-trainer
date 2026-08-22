@@ -19,6 +19,15 @@
       "health": 1
     },
     {
+      "name": "1W3TES DYNAMIC",
+      "size": "extra_small",
+      "wall": "mid",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
       "name": "1W3T STRAFE",
       "size": "normal",
       "wall": "mid",
@@ -30,6 +39,15 @@
     {
       "name": "1W3TS STRAFE",
       "size": "small",
+      "wall": "mid",
+      "targets": 3,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3TES STRAFE",
+      "size": "extra_small",
       "wall": "mid",
       "targets": 3,
       "movement": "strafing",
@@ -75,6 +93,15 @@
     {
       "name": "1W3TS DYNAMIC CLOSE",
       "size": "small",
+      "wall": "close",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3TES DYNAMIC CLOSE",
+      "size": "extra_small",
       "wall": "close",
       "targets": 3,
       "movement": "dynamic",
@@ -136,6 +163,78 @@
       "health": 1
     },
     {
+      "name": "1W3T DYNAMIC FAR",
+      "size": "normal",
+      "wall": "far",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3TS DYNAMIC FAR",
+      "size": "small",
+      "wall": "far",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3T STRAFE FAR",
+      "size": "normal",
+      "wall": "far",
+      "targets": 3,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3TS STRAFE FAR",
+      "size": "small",
+      "wall": "far",
+      "targets": 3,
+      "movement": "strafing",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3T STATIC FAR",
+      "size": "normal",
+      "wall": "far",
+      "targets": 3,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3TS STATIC FAR",
+      "size": "small",
+      "wall": "far",
+      "targets": 3,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3L STATIC FAR",
+      "size": "large",
+      "wall": "far",
+      "targets": 3,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
+      "name": "1W3EL STATIC FAR",
+      "size": "extra_large",
+      "wall": "far",
+      "targets": 3,
+      "movement": "static",
+      "mode": "clicking",
+      "health": 1
+    },
+    {
       "name": "1W3T DYNAMIC SWITCHING 20",
       "size": "normal",
       "wall": "mid",
@@ -147,6 +246,15 @@
     {
       "name": "1W3TS DYNAMIC SWITCHING 20",
       "size": "small",
+      "wall": "mid",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W3TES DYNAMIC SWITCHING 20",
+      "size": "extra_small",
       "wall": "mid",
       "targets": 3,
       "movement": "dynamic",
@@ -172,6 +280,15 @@
       "health": 10
     },
     {
+      "name": "1W3TES STRAFE SWITCHING 10",
+      "size": "extra_small",
+      "wall": "mid",
+      "targets": 3,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
       "name": "1W3T DYNAMIC SWITCHING 20 CLOSE",
       "size": "normal",
       "wall": "close",
@@ -183,6 +300,15 @@
     {
       "name": "1W3TS DYNAMIC SWITCHING 20 CLOSE",
       "size": "small",
+      "wall": "close",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W3TES DYNAMIC SWITCHING 20 CLOSE",
+      "size": "extra_small",
       "wall": "close",
       "targets": 3,
       "movement": "dynamic",
@@ -217,6 +343,42 @@
       "health": 10
     },
     {
+      "name": "1W3T DYNAMIC SWITCHING 20 FAR",
+      "size": "normal",
+      "wall": "far",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W3TS DYNAMIC SWITCHING 20 FAR",
+      "size": "small",
+      "wall": "far",
+      "targets": 3,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 20
+    },
+    {
+      "name": "1W3T STRAFE SWITCHING 10 FAR",
+      "size": "normal",
+      "wall": "far",
+      "targets": 3,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
+      "name": "1W3TS STRAFE SWITCHING 10 FAR",
+      "size": "small",
+      "wall": "far",
+      "targets": 3,
+      "movement": "strafing",
+      "mode": "tracking",
+      "health": 10
+    },
+    {
       "name": "1W1TS DYNAMIC TRACKING",
       "size": "small",
       "wall": "mid",
@@ -235,6 +397,15 @@
       "health": 0
     },
     {
+      "name": "1W1TS DYNAMIC TRACKING FAR",
+      "size": "small",
+      "wall": "far",
+      "targets": 1,
+      "movement": "dynamic",
+      "mode": "tracking",
+      "health": 0
+    },
+    {
       "name": "BOUNCE 180",
       "size": "normal",
       "wall": "mid",
@@ -244,13 +415,13 @@
       "health": 1
     },
     {
-      "name": "1W3EL STATIC FAR",
-      "size": "extra_large",
-      "wall": "far",
-      "targets": 3,
-      "movement": "static",
-      "mode": "clicking",
-      "health": 1
+      "name": "BOUNCE 180 SWITCHING 40",
+      "size": "normal",
+      "wall": "mid",
+      "targets": 6,
+      "movement": "bounce",
+      "mode": "tracking",
+      "health": 40
     }
   ]
 }

@@ -57,32 +57,51 @@ int run_self_test() {
     const char* default_wall_order[] = {
         "1W3T DYNAMIC",
         "1W3TS DYNAMIC",
+        "1W3TES DYNAMIC",
         "1W3T STRAFE",
         "1W3TS STRAFE",
+        "1W3TES STRAFE",
         "1W3T STATIC",
         "1W3TS STATIC",
         "1W3TES STATIC",
         "1W3T DYNAMIC CLOSE",
         "1W3TS DYNAMIC CLOSE",
+        "1W3TES DYNAMIC CLOSE",
         "1W3T STRAFE CLOSE",
         "1W3TS STRAFE CLOSE",
         "1W3TES STRAFE CLOSE",
         "1W3T STATIC CLOSE",
         "1W3TS STATIC CLOSE",
         "1W3TES STATIC CLOSE",
+        "1W3T DYNAMIC FAR",
+        "1W3TS DYNAMIC FAR",
+        "1W3T STRAFE FAR",
+        "1W3TS STRAFE FAR",
+        "1W3T STATIC FAR",
+        "1W3TS STATIC FAR",
+        "1W3L STATIC FAR",
+        "1W3EL STATIC FAR",
         "1W3T DYNAMIC SWITCHING 20",
         "1W3TS DYNAMIC SWITCHING 20",
+        "1W3TES DYNAMIC SWITCHING 20",
         "1W3T STRAFE SWITCHING 10",
         "1W3TS STRAFE SWITCHING 10",
+        "1W3TES STRAFE SWITCHING 10",
         "1W3T DYNAMIC SWITCHING 20 CLOSE",
         "1W3TS DYNAMIC SWITCHING 20 CLOSE",
+        "1W3TES DYNAMIC SWITCHING 20 CLOSE",
         "1W3T STRAFE SWITCHING 10 CLOSE",
         "1W3TS STRAFE SWITCHING 10 CLOSE",
         "1W3TES STRAFE SWITCHING 10 CLOSE",
+        "1W3T DYNAMIC SWITCHING 20 FAR",
+        "1W3TS DYNAMIC SWITCHING 20 FAR",
+        "1W3T STRAFE SWITCHING 10 FAR",
+        "1W3TS STRAFE SWITCHING 10 FAR",
         "1W1TS DYNAMIC TRACKING",
         "1W1TS DYNAMIC TRACKING CLOSE",
+        "1W1TS DYNAMIC TRACKING FAR",
         "BOUNCE 180",
-        "1W3EL STATIC FAR",
+        "BOUNCE 180 SWITCHING 40",
     };
     const int default_wall_count = static_cast<int>(sizeof(default_wall_order) / sizeof(default_wall_order[0]));
     ok = self_test_check(static_cast<int>(game.wall_presets.size()) == default_wall_count, "default wall preset list matches generated clicking, switching, tracking, and bounce presets") && ok;
@@ -109,6 +128,8 @@ int run_self_test() {
     ok = self_test_check(track_index >= 0 && game.wall_presets[track_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[track_index].settings.target_health == 0 && game.wall_presets[track_index].settings.target_count_min == 1 && std::fabs(game.wall_presets[track_index].settings.radius_min - 0.04f) < 0.0001f, "tracking default is one small dynamic target with infinite health") && ok;
     int bounce_index = find_wall_preset(game, "BOUNCE 180");
     ok = self_test_check(bounce_index >= 0 && game.wall_presets[bounce_index].settings.bounce && game.wall_presets[bounce_index].settings.target_count_min == 6 && std::fabs(game.wall_presets[bounce_index].settings.radius_min - 0.08f) < 0.0001f, "bounce 180 default is a six-ball clicking task with normal radius") && ok;
+    int bounce_switch_index = find_wall_preset(game, "BOUNCE 180 SWITCHING 40");
+    ok = self_test_check(bounce_switch_index >= 0 && game.wall_presets[bounce_switch_index].settings.bounce && game.wall_presets[bounce_switch_index].settings.task_mode == TaskMode::Tracking && game.wall_presets[bounce_switch_index].settings.target_health == 40 && game.wall_presets[bounce_switch_index].settings.target_count_min == 6 && std::fabs(game.wall_presets[bounce_switch_index].settings.radius_min - 0.08f) < 0.0001f, "bounce 180 switching default is a six-ball tracking task with 40 health") && ok;
     ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_min - 30.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_angle_max - 75.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_min - 4.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_speed_max - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_camera_height_m - 0.25f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_gravity_m - 6.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.bounce_dir_change_p - 0.0f) < 0.0001f, "bounce 180 default jump angle, takeoff speed, camera height, gravity, and dir-change probability are set") && ok;
     ok = self_test_check(bounce_index >= 0 && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_min - 8.0f) < 0.0001f && std::fabs(game.wall_presets[bounce_index].settings.wall_distance_max - 10.0f) < 0.0001f, "bounce 180 default uses the same 8-10m range as 1W3T DYNAMIC") && ok;
     int far_xl_index = find_wall_preset(game, "1W3EL STATIC FAR");
@@ -346,6 +367,8 @@ int run_self_test() {
     std::string unique_click = unique_preset_name(game.wall_presets, "CLICK PRESET 4", -1);
     ok = self_test_check(unique_click != "CLICK PRESET 4", "generated wall preset names avoid duplicates") && ok;
     ok = self_test_check(sanitize_preset_name("1W4TES STRAFE SWITCHING 20 CLOSE") == "1W4TES STRAFE SWITCHING 20 CLOSE", "preset name limit keeps switching CLOSE labels") && ok;
+    ok = self_test_check(sanitize_preset_name("1W3TES DYNAMIC SWITCHING 20 CLOSE") == "1W3TES DYNAMIC SWITCHING 20 CLOSE" && sanitize_preset_name("1W3TES DYNAMIC SWITCHING 20 CLOSE").size() == 33, "preset name cap allows the longest builtin switching name") && ok;
+    ok = self_test_check(filter_preset_name_draft("1W3TES DYNAMIC SWITCHING 20 CLOSE").size() == 33, "name draft filter does not truncate a 33-character preset name") && ok;
 
     game.wall_presets = {{"ONLY WALL", WallClickSettings{}}};
     game.selected_wall_preset = 0;
@@ -392,7 +415,7 @@ int run_self_test() {
         reset_test.wall_preset_scroll = 1;
         reset_test.active_field = FieldId::WallName;
         reset_wall_presets(reset_test);
-        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 28 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
+        ok = self_test_check(static_cast<int>(reset_test.wall_presets.size()) == 47 && find_wall_preset(reset_test, "CUSTOM") < 0, "reset tasks replaces every preset with the compiled defaults") && ok;
         ok = self_test_check(reset_test.selected_wall_preset == 0 && reset_test.wall_preset_scroll == 0 && reset_test.wall_preset_name == "1W3T DYNAMIC", "reset tasks selects the first default task") && ok;
         ok = self_test_check(std::fabs(reset_test.wall_settings.radius_min - 0.08f) < 0.0001f && std::fabs(reset_test.wall_settings.horizontal_speed_max - 1.5f) < 0.0001f, "reset tasks restores compiled default settings") && ok;
         ok = self_test_check(reset_test.active_field == FieldId::None, "reset tasks exits text edit mode") && ok;
