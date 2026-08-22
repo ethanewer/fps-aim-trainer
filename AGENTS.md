@@ -260,8 +260,8 @@ alignment, overflow, and focus highlighting.
 - **Don't commit build artifacts.** `build/`, `target/`, `debug-shots/`, and Python `__pycache__/`
   are gitignored; keep them out of commits. Do commit `data/default-tasks.json` and `src/default_tasks.inc` after
   regenerating defaults. The repo tracks source, `Makefile`, `README.md`, docs, and that task table.
-- **Git:** branch off `main` before committing; keep commits focused. Run the self-test and a
-  warning-clean build before committing.
+- **Git:** commit directly to `main` (solo project, no PRs); keep commits focused. Run the
+  self-test and a warning-clean build before committing.
 
 ## Definition of done (checklist for any change)
 
